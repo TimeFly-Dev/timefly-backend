@@ -57,17 +57,17 @@ class AuthLoggingService {
 		const values = batch
 			.map(
 				(entry) => `(
-      '${this.formatDate(entry.timestamp)}',
-      ${entry.user_id},
-      '${entry.email}',
-      ${entry.success ? 1 : 0},
-      '${entry.ip_address}',
-      '${entry.user_agent}',
-      '${entry.country_code}',
-      '${entry.city}',
-      '${entry.provider}',
-      '${entry.error_message || ''}'
-    )`
+					'${this.formatDate(entry.timestamp)}',
+					${entry.user_id},
+					'${entry.email}',
+					${entry.success ? 1 : 0},
+					'${entry.ip_address}',
+					'${entry.user_agent}',
+					'${entry.country_code}',
+					'${entry.city}',
+					'${entry.provider}',
+					'${entry.error_message || ''}'
+				)`
 			)
 			.join(',')
 

@@ -76,7 +76,6 @@ auth.get(
 	async (c: Context) => {
 		try {
 			const googleUser = c.get('user-google') as GoogleUserResponse
-			console.log('Google user data:', googleUser)
 
 			if (!googleUser || !googleUser.id || !googleUser.email || !googleUser.name) {
 				console.error('Invalid Google user data:', googleUser)
@@ -108,7 +107,6 @@ auth.get(
 
 			try {
 				if (!dbUser) {
-					console.log('Creating new user...')
 					dbUser = await createUser({
 						googleId: googleUser.id,
 						email: googleUser.email,
@@ -116,7 +114,6 @@ auth.get(
 						avatarUrl: googleUser.picture || ''
 					})
 				} else {
-					console.log('Updating existing user...')
 					await updateUser(dbUser.id, {
 						email: googleUser.email,
 						fullName: googleUser.name,

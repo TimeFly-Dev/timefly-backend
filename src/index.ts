@@ -5,8 +5,9 @@ import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { openAPISpecs } from 'hono-openapi'
 import { apiReference } from '@scalar/hono-api-reference'
-import { CONFIG } from './config'
-import { auth } from './routes/auth'
+import { CONFIG } from '@/config'
+import { auth } from '@/routes/auth'
+import { sync } from '@/routes/sync'
 
 const app = new Hono()
 
@@ -20,6 +21,9 @@ app.get('/', (c) => c.text(`TimeFly API (${CONFIG.NODE_ENV})`))
 
 // Include auth routes
 app.route('/auth', auth)
+
+// Include sync routes
+app.route('/sync', sync)
 
 // OpenAPI documentation
 app.get(
