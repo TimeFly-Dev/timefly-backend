@@ -1,0 +1,72 @@
+{
+    "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+    "vcs": {
+        "enabled": false,
+        "clientKind": "git",
+        "useIgnoreFile": false
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "tab",
+        "indentWidth": 4,
+        "lineWidth": 140,
+        "ignore": [
+            "node_modules",
+            "dist",
+            ".husky",
+            "tsconfig.node.json",
+            "tsconfig.app.json",
+            "build"
+        ]
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "trailingCommas": "none",
+            "semicolons": "asNeeded"
+        }
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "recommended": true,
+            "style": {
+                "useBlockStatements": "error",
+                "useShorthandArrayType": "error",
+                "useShorthandFunctionType": "error",
+                "useTemplate": "error"
+            },
+            "suspicious": {
+                "noAssignInExpressions": "error",
+                "noExplicitAny": "error"
+            },
+            "complexity": {
+                "noForEach": "off"
+            },
+            "correctness": {
+                "noUnusedVariables": "error"
+            }
+        },
+        "ignore": [
+            "node_modules",
+            "dist",
+            ".husky",
+            "tsconfig.node.json",
+            "tsconfig.app.json",
+            "build"
+        ]
+    },
+    "organizeImports": {
+        "enabled": true
+    },
+    "files": {
+        "ignoreUnknown": true,
+        "ignore": [
+            "node_modules",
+            "dist",
+            "tsconfig.node.json",
+            "tsconfig.app.json",
+            "build"
+        ]
+    }
+}

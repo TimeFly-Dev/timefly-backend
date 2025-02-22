@@ -1,0 +1,37 @@
+{
+    "name": "timefly-backend",
+    "version": "1.0.0",
+    "scripts": {
+        "dev": "NODE_ENV=development bun run --hot src/index.ts",
+        "prod": "NODE_ENV=production bun run --hot src/index.ts",
+        "build": "bun build ./src/index.ts --outdir ./build --target bun --minify",
+        "build:dev": "NODE_ENV=development bun run build",
+        "build:prod": "NODE_ENV=production bun run build",
+        "start:dev": "NODE_ENV=development bun run build/index.js",
+        "start:prod": "NODE_ENV=production bun run build/index.js",
+        "test": "NODE_ENV=test bun test",
+        "test:watch": "NODE_ENV=test bun test --watch",
+        "test:coverage": "NODE_ENV=test bun test --coverage",
+        "lint": "biome lint",
+        "prepare": "husky",
+        "init-db": "bun run src/scripts/init-clickhouse.ts && bun run src/scripts/init-mysql.ts",
+        "generate-massive-data": "bun run src/scripts/generate-massive-sample-data.ts"
+    },
+    "dependencies": {
+        "@hono/zod-validator": "0.4.3",
+        "@scalar/hono-api-reference": "0.5.175",
+        "hono": "4.7.2",
+        "hono-openapi": "0.4.4",
+        "zod": "3.24.2",
+        "zod-openapi": "4.2.3",
+        "mysql2": "3.12.0",
+        "@clickhouse/client": "1.10.1"
+    },
+    "devDependencies": {
+        "@types/bun": "latest",
+        "@commitlint/cli": "19.7.1",
+        "@commitlint/config-conventional": "19.7.1",
+        "husky": "9.1.7",
+        "@biomejs/biome": "1.9.4"
+    }
+}
