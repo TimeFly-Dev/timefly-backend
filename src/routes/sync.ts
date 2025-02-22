@@ -8,9 +8,10 @@ import { authMiddleware } from '@/middleware/auth'
 
 const sync = new Hono()
 
+sync.use('*', authMiddleware)
+
 sync.post(
 	'/',
-	authMiddleware,
 	describeRoute({
 		description: 'Synchronize time entries',
 		tags: ['Synchronization'],

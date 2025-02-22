@@ -9,6 +9,7 @@ import { CONFIG } from '@/config'
 import { auth } from '@/routes/auth'
 import { sync } from '@/routes/sync'
 import { stats } from '@/routes/stats'
+import { exports } from '@/routes/exports'
 
 const app = new Hono()
 
@@ -28,6 +29,9 @@ app.route('/sync', sync)
 
 // Include stats routes
 app.route('/stats', stats)
+
+// Include exports routes
+app.route('/exports', exports)
 
 // OpenAPI documentation
 app.get(

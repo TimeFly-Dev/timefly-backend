@@ -18,14 +18,15 @@
         "generate-massive-data": "bun run src/scripts/generate-massive-sample-data.ts"
     },
     "dependencies": {
+        "@clickhouse/client": "1.10.1",
         "@hono/zod-validator": "0.4.3",
         "@scalar/hono-api-reference": "0.5.175",
         "hono": "4.7.2",
         "hono-openapi": "0.4.4",
-        "zod": "3.24.2",
-        "zod-openapi": "4.2.3",
         "mysql2": "3.12.0",
-        "@clickhouse/client": "1.10.1"
+        "resend": "^4.1.2",
+        "zod": "3.24.2",
+        "zod-openapi": "4.2.3"
     },
     "devDependencies": {
         "@types/bun": "latest",

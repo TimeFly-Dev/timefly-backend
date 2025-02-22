@@ -20,7 +20,9 @@ const requiredEnvVars = [
 	'MYSQL_PORT',
 	'MYSQL_USER',
 	'MYSQL_PASSWORD',
-	'MYSQL_DATABASE'
+	'MYSQL_DATABASE',
+	'RESEND_API_KEY',
+	'EMAIL_FROM'
 ]
 
 // Validate required environment variables
@@ -49,7 +51,10 @@ export const CONFIG = {
 	MYSQL_PASSWORD: process.env.MYSQL_PASSWORD as string,
 	MYSQL_DATABASE: process.env.MYSQL_DATABASE as string,
 	AUTH_LOG_BATCH_SIZE: Number(process.env.AUTH_LOG_BATCH_SIZE || '100'),
-	AUTH_LOG_PROCESS_INTERVAL: Number(process.env.AUTH_LOG_PROCESS_INTERVAL || '5000')
+	AUTH_LOG_PROCESS_INTERVAL: Number(process.env.AUTH_LOG_PROCESS_INTERVAL || '5000'),
+	RESEND_API_KEY: process.env.RESEND_API_KEY as string,
+	EMAIL_FROM: process.env.EMAIL_FROM as string,
+	BASE_URL: process.env.BASE_URL || 'http://localhost:3000'
 }
 
 // Type assertion to ensure all config values are defined
@@ -59,6 +64,11 @@ const assertConfig: Record<keyof typeof CONFIG, string | number> = CONFIG
 Object.entries(assertConfig).forEach(([key, value]) => {
 	if (value === undefined) {
 		throw new Error(`Configuration value for ${key} is undefined`)
+	}
+	if (['RESEND_API_KEY', 'EMAIL_FROM'].includes(key)) {
+		if (typeof value !== 'string') {
+			throw new Error(`Configuration value for ${key} is not a valid string`)
+		}
 	}
 	if (['PORT', 'CLICKHOUSE_PORT', 'MYSQL_PORT', 'AUTH_LOG_BATCH_SIZE', 'AUTH_LOG_PROCESS_INTERVAL'].includes(key)) {
 		if (typeof value !== 'number' || Number.isNaN(value)) {
