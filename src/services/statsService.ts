@@ -1,5 +1,5 @@
 import { clickhouseClient } from '../db/clickhouse'
-import type { CodingHours, CodingStatsOptions, ClickHouseResult, TotalCodingHours } from '../types/stats'
+import type { CodingHours, CodingStatsOptions, ClickHouseResult, TotalCodingHours, TopLanguage, TopLanguageRaw } from '../types/stats'
 import { formatDuration, formatDateRange } from '../utils/timeFormatters'
 
 export async function getCodingStats({ userId, startDate, endDate, date, aggregation }: CodingStatsOptions): Promise<CodingHours[]> {
@@ -48,11 +48,11 @@ export async function getCodingStats({ userId, startDate, endDate, date, aggrega
 	}
 
 	const query = `
-    SELECT ${selectClause}
-    FROM time_entries
-    ${whereClause}
-    ${groupBy}
-  `
+		SELECT ${selectClause}
+		FROM time_entries
+		${whereClause}
+		${groupBy}
+	`
 
 	const result = await clickhouseClient.query({
 		query,
@@ -77,5 +77,77 @@ export async function getCodingStats({ userId, startDate, endDate, date, aggrega
 	return (data as CodingHours[]).map((row) => ({
 		date: row.date,
 		hours: formatDuration(Number(row.hours))
+	}))
+}
+
+export async function getTopLanguages({
+	userId,
+	startDate,
+	endDate,
+	limit = 10,
+	period = 'all'
+}: {
+	userId: number
+	startDate?: string
+	endDate?: string
+	limit?: number
+	period?: 'day' | 'week' | 'month' | 'year' | 'all'
+}): Promise<TopLanguage[]> {
+	let whereClause = `WHERE user_id = ${userId}`
+	let dateFunction: string
+
+	switch (period) {
+		case 'day':
+			dateFunction = 'toDate(start_time)'
+			whereClause += ` AND ${dateFunction} = today()`
+			break
+		case 'week':
+			dateFunction = 'toStartOfWeek(start_time)'
+			whereClause += ` AND ${dateFunction} = toStartOfWeek(now())`
+			break
+		case 'month':
+			dateFunction = 'toStartOfMonth(start_time)'
+			whereClause += ` AND ${dateFunction} = toStartOfMonth(now())`
+			break
+		case 'year':
+			dateFunction = 'toStartOfYear(start_time)'
+			whereClause += ` AND ${dateFunction} = toStartOfYear(now())`
+			break
+		default:
+			dateFunction = 'toDate(start_time)'
+	}
+
+	if (startDate) {
+		whereClause += ` AND start_time >= toDateTime('${startDate}')`
+	}
+	if (endDate) {
+		whereClause += ` AND end_time <= toDateTime('${endDate}')`
+	}
+
+	const query = `
+		SELECT 
+			language,
+			SUM(dateDiff('second', start_time, end_time)) as total_seconds,
+			MAX(end_time) as last_used,
+			argMax(project, end_time) as last_project
+		FROM time_entries
+			${whereClause}
+			GROUP BY language
+			ORDER BY total_seconds DESC
+		LIMIT ${limit}
+	`
+
+	const result = await clickhouseClient.query({
+		query,
+		format: 'JSONEachRow'
+	})
+
+	const data = (await result.json()) as TopLanguageRaw[]
+
+	return data.map((row) => ({
+		language: row.language,
+		hours: formatDuration(Number(row.total_seconds) / 3600),
+		lastUsed: new Date(row.last_used).toISOString(),
+		lastProject: row.last_project
 	}))
 }

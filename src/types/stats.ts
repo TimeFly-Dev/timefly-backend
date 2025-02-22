@@ -20,3 +20,25 @@ export interface CodingStatsOptions {
 }
 
 export type ClickHouseResult = CodingHours | TotalCodingHours
+
+export interface TopLanguageRaw {
+	language: string
+	total_seconds: number
+	last_used: string
+	last_project: string
+}
+
+export interface TopLanguage {
+	language: string
+	hours: string
+	lastUsed: string
+	lastProject: string
+}
+
+export interface TopLanguagesOptions {
+	userId: number
+	startDate?: string
+	endDate?: string
+	limit?: number
+	period?: 'day' | 'week' | 'month' | 'year' | 'all'
+}
