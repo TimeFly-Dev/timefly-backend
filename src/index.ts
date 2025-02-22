@@ -8,6 +8,7 @@ import { apiReference } from '@scalar/hono-api-reference'
 import { CONFIG } from '@/config'
 import { auth } from '@/routes/auth'
 import { sync } from '@/routes/sync'
+import { stats } from '@/routes/stats'
 
 const app = new Hono()
 
@@ -24,6 +25,9 @@ app.route('/auth', auth)
 
 // Include sync routes
 app.route('/sync', sync)
+
+// Include stats routes
+app.route('/stats', stats)
 
 // OpenAPI documentation
 app.get(

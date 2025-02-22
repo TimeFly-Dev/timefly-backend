@@ -2,6 +2,12 @@ import type { Context, Next } from 'hono'
 import { verify } from 'hono/jwt'
 import { CONFIG } from '../config'
 
+declare module 'hono' {
+	interface ContextVariableMap {
+		userId: number
+	}
+}
+
 export async function authMiddleware(c: Context, next: Next) {
 	const authHeader = c.req.header('Authorization')
 	if (!authHeader || !authHeader.startsWith('Bearer ')) {
