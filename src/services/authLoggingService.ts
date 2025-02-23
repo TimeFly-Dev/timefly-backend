@@ -49,10 +49,10 @@ class AuthLoggingService {
 
 	private async insertBatch(batch: AuthLogEntry[]): Promise<void> {
 		const query = `
-      INSERT INTO auth_logs 
-      (timestamp, user_id, email, success, ip_address, user_agent, country_code, city, provider, error_message)
-      VALUES
-    `
+			INSERT INTO auth_logs 
+			(timestamp, user_id, email, success, ip_address, user_agent, country_code, city, provider, error_message)
+			VALUES
+		`
 
 		const values = batch
 			.map(

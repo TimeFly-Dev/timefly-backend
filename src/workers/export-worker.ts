@@ -4,12 +4,14 @@ import type { TimeEntry } from '../types/sync'
 import { CONFIG } from '../config'
 import * as fs from 'node:fs'
 import path from 'node:path'
+import { getExportEmailTemplate } from '../templates/export-email'
 
 declare const self: {
 	postMessage: (message: WorkerMessage) => void
 	onmessage: ((event: MessageEvent<ExportJob>) => void) | null
 }
 
+const EXPORT_EXPIRATION_DAYS = 7
 const BATCH_SIZE = 1000
 const EXPORT_DIR = path.join(process.cwd(), 'exports')
 const resend = new Resend(CONFIG.RESEND_API_KEY)
@@ -29,6 +31,13 @@ interface WorkerMessage {
 	downloadUrl?: string
 }
 
+interface ExportMetrics {
+	entriesCount: number
+	fileSize: number
+	processingTime: number
+	error?: string
+}
+
 // Ensure the export directory exists
 if (!fs.existsSync(EXPORT_DIR)) {
 	fs.mkdirSync(EXPORT_DIR, { recursive: true })
@@ -42,8 +51,51 @@ function formatFileName(userId: number, startDate?: string, endDate?: string): s
 	return `user-${userId}${dateRange}_${timestamp}.json`
 }
 
+async function logExportEvent(userId: number, metrics: ExportMetrics, startDate?: string, endDate?: string, emailSent = true) {
+	const query = `
+    INSERT INTO export_events (
+      user_id,
+      timestamp,
+      entries_count,
+      file_size_bytes,
+      processing_time_ms,
+      start_date,
+      end_date,
+      expires_at,
+      email_sent,
+      error_message
+    )
+    VALUES (
+      ${userId},
+      now64(),
+      ${metrics.entriesCount},
+      ${metrics.fileSize},
+      ${metrics.processingTime},
+      ${startDate ? `parseDateTime64BestEffort('${startDate}')` : 'NULL'},
+      ${endDate ? `parseDateTime64BestEffort('${endDate}')` : 'NULL'},
+      now64() + INTERVAL ${EXPORT_EXPIRATION_DAYS} DAY,
+      ${emailSent ? 1 : 0},
+      '${metrics.error || ''}'
+    )
+  `
+
+	await clickhouseClient.exec({
+		query,
+		clickhouse_settings: {
+			async_insert: 1
+		}
+	})
+}
+
 self.onmessage = async (event: MessageEvent<ExportJob>) => {
 	const { userId, email, startDate, endDate } = event.data
+	const startTime = Date.now()
+	const metrics: ExportMetrics = {
+		entriesCount: 0,
+		fileSize: 0,
+		processingTime: 0,
+		error: undefined
+	}
 
 	console.log(`[${new Date().toISOString()}] Worker started for user ${userId}`)
 
@@ -56,24 +108,24 @@ self.onmessage = async (event: MessageEvent<ExportJob>) => {
 		// Query in batches
 		while (true) {
 			let query = `
-				SELECT 
-				entity,
-				type,
-				category,
-				start_time,
-				end_time,
-				project,
-				branch,
-				language,
-				dependencies,
-				machine_name_id,
-				line_additions,
-				line_deletions,
-				lines,
-				is_write
-				FROM time_entries
-				WHERE user_id = ${userId}
-			`
+        SELECT 
+          entity,
+          type,
+          category,
+          start_time,
+          end_time,
+          project,
+          branch,
+          language,
+          dependencies,
+          machine_name_id,
+          line_additions,
+          line_deletions,
+          lines,
+          is_write
+        FROM time_entries
+        WHERE user_id = ${userId}
+      `
 
 			if (startDate) {
 				query += ` AND start_time >= toDateTime('${startDate}')`
@@ -83,10 +135,10 @@ self.onmessage = async (event: MessageEvent<ExportJob>) => {
 			}
 
 			query += `
-				ORDER BY start_time
-				LIMIT ${BATCH_SIZE}
-				OFFSET ${offset}
-			`
+        ORDER BY start_time
+        LIMIT ${BATCH_SIZE}
+        OFFSET ${offset}
+      `
 
 			const result = await clickhouseClient.query({
 				query,
@@ -112,7 +164,9 @@ self.onmessage = async (event: MessageEvent<ExportJob>) => {
 
 		console.log(`[${new Date().toISOString()}] Data fetch completed for user ${userId}. Total entries: ${allEntries.length}`)
 
-		// Generate export file with new naming convention
+		// Update metrics before saving file
+		metrics.entriesCount = allEntries.length
+
 		const exportData = {
 			userId,
 			exportDate: new Date().toISOString(),
@@ -123,111 +177,37 @@ self.onmessage = async (event: MessageEvent<ExportJob>) => {
 			entries: allEntries
 		}
 
-		const exportContent = JSON.stringify(exportData)
+		// Save file with expiration
+		const expirationDate = new Date()
+		expirationDate.setDate(expirationDate.getDate() + EXPORT_EXPIRATION_DAYS)
+
+		const metadata = {
+			expiresAt: expirationDate.toISOString(),
+			...exportData
+		}
+
+		const exportContent = JSON.stringify(metadata)
 		const fileName = formatFileName(userId, startDate, endDate)
 		const filePath = path.join(EXPORT_DIR, fileName)
 
-		// Save the file locally
+		// Write file and update metrics
 		fs.writeFileSync(filePath, exportContent)
+		metrics.fileSize = fs.statSync(filePath).size
 
-		const fileSize = fs.statSync(filePath).size
 		const downloadUrl = `${CONFIG.BASE_URL}/exports/download/${fileName}`
 
 		console.log(`[${new Date().toISOString()}] Export file saved: ${filePath}`)
 
-		// Prepare email content with improved formatting
-		const emailHtml = `
-			<!DOCTYPE html>
-			<html lang="en">
-			<head>
-				<meta charset="UTF-8">
-				<meta name="viewport" content="width=device-width, initial-scale=1.0">
-				<title>TimeFly Data Export</title>
-				<style>
-				body { 
-					font-family: Arial, sans-serif;
-					line-height: 1.6;
-					color: #333;
-					margin: 0;
-					padding: 0;
-				}
-				.container {
-					max-width: 600px;
-					margin: 0 auto;
-					padding: 20px;
-				}
-				.header {
-					background-color: #2c3e50;
-					color: white;
-					padding: 20px;
-					text-align: center;
-					border-radius: 5px 5px 0 0;
-				}
-				h1 {
-					margin: 0;
-					font-size: 24px;
-				}
-				.content {
-					padding: 20px;
-					background-color: #ffffff;
-				}
-				.details {
-					background-color: #f8f9fa;
-					padding: 15px;
-					border-radius: 5px;
-					margin: 20px 0;
-				}
-				.download-link {
-					background-color: #3498db;
-					color: white;
-					padding: 12px 20px;
-					text-decoration: none;
-					border-radius: 5px;
-					display: inline-block;
-					margin: 10px 0;
-				}
-				.download-link:hover {
-					background-color: #2980b9;
-				}
-				.footer {
-					margin-top: 20px;
-					padding-top: 20px;
-					border-top: 1px solid #eee;
-					font-size: 0.9em;
-					color: #7f8c8d;
-				}
-				</style>
-			</head>
-			<body>
-				<div class="container">
-				<div class="header">
-					<h1>Your TimeFly Data Export is Ready</h1>
-				</div>
-				<div class="content">
-					<p>Hello,</p>
-					<p>Your TimeFly data export has been successfully generated. Here are the details:</p>
-					<div class="details">
-					<p><strong>Total entries:</strong> ${allEntries.length.toLocaleString()}</p>
-					<p><strong>Export date:</strong> ${new Date().toLocaleString()}</p>
-					<p><strong>Date range:</strong> ${startDate || 'All time'} to ${endDate || 'Present'}</p>
-					<p><strong>File size:</strong> ${(fileSize / (1024 * 1024)).toFixed(2)} MB</p>
-					</div>
-					<p>Due to the large size of your export, we've saved it on our servers. You can download your data using the button below:</p>
-					<p style="text-align: center;">
-					<a href="${downloadUrl}" class="download-link">Download Export</a>
-					</p>
-					<p><small>This link will be available for the next 7 days.</small></p>
-					<p>If you have any questions or need further assistance, please don't hesitate to contact our support team.</p>
-					<div class="footer">
-					<p>Best regards,<br>The TimeFly Team</p>
-					</div>
-				</div>
-				</div>
-			</body>
-			</html>
-		`
+		const emailHtml = getExportEmailTemplate({
+			allEntries,
+			downloadUrl,
+			startDate,
+			endDate,
+			expirationDate,
+			fileSize: metrics.fileSize
+		})
 
-		// Send email with download link
+		// Send email and log event
 		const { data, error } = await resend.emails.send({
 			from: CONFIG.EMAIL_FROM,
 			to: email,
@@ -239,6 +219,12 @@ self.onmessage = async (event: MessageEvent<ExportJob>) => {
 			throw new Error(`Failed to send email: ${error.message}`)
 		}
 
+		// Calculate final metrics
+		metrics.processingTime = Date.now() - startTime
+
+		// Log export event
+		await logExportEvent(userId, metrics, startDate, endDate)
+
 		console.log(`[${new Date().toISOString()}] Email sent successfully for user ${userId}. Email ID: ${data?.id}`)
 
 		self.postMessage({
@@ -248,9 +234,16 @@ self.onmessage = async (event: MessageEvent<ExportJob>) => {
 		})
 	} catch (error) {
 		console.error(`[${new Date().toISOString()}] Error in export process for user ${userId}:`, error)
+
+		metrics.processingTime = Date.now() - startTime
+		metrics.error = error instanceof Error ? error.message : 'Unknown error occurred'
+
+		// Log failed export
+		await logExportEvent(userId, metrics, startDate, endDate, false)
+
 		self.postMessage({
 			type: 'error',
-			error: error instanceof Error ? error.message : 'Unknown error occurred'
+			error: metrics.error
 		})
 	}
 }

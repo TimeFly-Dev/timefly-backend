@@ -118,22 +118,22 @@ async function insertBatch(userId: number, entries: TimeEntry[]): Promise<void> 
 	const values = entries
 		.map(
 			(entry) => `(
-        ${userId},
-        '${entry.entity}',
-        '${entry.type}',
-        '${entry.category}',
-        toDateTime64(${entry.start_time / 1000}, 3),
-        toDateTime64(${entry.end_time / 1000}, 3),
-        '${entry.project}',
-        '${entry.branch}',
-        '${entry.language}',
-        '${entry.dependencies}',
-        '${entry.machine_name_id}',
-        ${entry.line_additions},
-        ${entry.line_deletions},
-        ${entry.lines},
-        ${entry.is_write ? 1 : 0}
-      )`
+				${userId},
+				'${entry.entity}',
+				'${entry.type}',
+				'${entry.category}',
+				toDateTime64(${entry.start_time / 1000}, 3),
+				toDateTime64(${entry.end_time / 1000}, 3),
+				'${entry.project}',
+				'${entry.branch}',
+				'${entry.language}',
+				'${entry.dependencies}',
+				'${entry.machine_name_id}',
+				${entry.line_additions},
+				${entry.line_deletions},
+				${entry.lines},
+				${entry.is_write ? 1 : 0}
+			)`
 		)
 		.join(',')
 
