@@ -4,7 +4,7 @@ import { googleAuth } from '@hono/oauth-providers/google'
 import { describeRoute } from 'hono-openapi'
 import { resolver, validator as zValidator } from 'hono-openapi/zod'
 import { CONFIG } from '@/config'
-import { createUser, getUserByGoogleId, updateUser } from '@/services/userService'
+import { createUser, getUserById, getUserByGoogleId, updateUser } from '@/services/userService'
 import { generateTokens, verifyRefreshToken } from '@/services/authService'
 import type { GoogleUserResponse } from '@/types/auth'
 import { googleCallbackSchema, refreshTokenSchema, tokenResponseSchema, errorResponseSchema } from '@/validations/authValidations'
@@ -159,21 +159,24 @@ auth.get(
 				)
 			}
 
-			const { accessToken, refreshToken } = await generateTokens(dbUser.id)
+			const { accessToken, refreshToken } = await generateTokens(dbUser)
 
-			return c.json({
-				success: true,
-				data: {
-					accessToken,
-					refreshToken,
-					user: {
-						id: dbUser.id,
-						email: dbUser.email,
-						fullName: dbUser.fullName,
-						avatarUrl: dbUser.avatarUrl
-					}
-				}
-			})
+			return c.redirect(
+				`http://localhost:3001/google/callback?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`
+			)
+			// return c.json({
+			// 	success: true,
+			// 	data: {
+			// 		accessToken,
+			// 		refreshToken,
+			// 		user: {
+			// 			id: dbUser.id,
+			// 			email: dbUser.email,
+			// 			fullName: dbUser.fullName,
+			// 			avatarUrl: dbUser.avatarUrl
+			// 		}
+			// 	}
+			// })
 		} catch (error) {
 			console.error('Authentication error:', error)
 
@@ -240,7 +243,8 @@ auth.post(
 		try {
 			const { refreshToken } = refreshTokenSchema.parse(await c.req.json())
 			const userId = await verifyRefreshToken(refreshToken)
-			const tokens = await generateTokens(userId)
+			const userData = await getUserById(userId)
+			const tokens = await generateTokens(userData)
 
 			return c.json({
 				success: true,

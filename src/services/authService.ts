@@ -1,9 +1,24 @@
 import { sign, verify } from 'hono/jwt'
 import { CONFIG } from '../config'
 
-export async function generateTokens(userId: number): Promise<{ accessToken: string; refreshToken: string }> {
-	const accessToken = await sign({ userId }, CONFIG.JWT_ACCESS_SECRET, 'HS256')
-	const refreshToken = await sign({ userId }, CONFIG.JWT_REFRESH_SECRET, 'HS256')
+export async function generateTokens(dbUser: {
+	id: number
+	email: string
+	fullName: string
+	avatarUrl: string
+})
+	: Promise<{
+		accessToken: string
+		refreshToken: string
+	}> {
+	const accessToken = await sign({
+		userId: dbUser.id,
+		email: dbUser.email,
+		fullName: dbUser.fullName,
+		avatarUrl: dbUser.avatarUrl
+	}, CONFIG.JWT_ACCESS_SECRET, 'HS256')
+
+	const refreshToken = await sign({ userId: dbUser.id }, CONFIG.JWT_REFRESH_SECRET, 'HS256')
 
 	return { accessToken, refreshToken }
 }
