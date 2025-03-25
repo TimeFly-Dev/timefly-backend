@@ -10,6 +10,7 @@ import { auth } from '@/routes/auth'
 import { sync } from '@/routes/sync'
 import { stats } from '@/routes/stats'
 import { exports } from '@/routes/exports'
+import { widgets } from '@/routes/widgets'
 
 const app = new Hono()
 
@@ -21,17 +22,11 @@ app.use('*', secureHeaders())
 
 app.get('/', (c) => c.text(`TimeFly API (${CONFIG.NODE_ENV})`))
 
-// Include auth routes
 app.route('/auth', auth)
-
-// Include sync routes
 app.route('/sync', sync)
-
-// Include stats routes
 app.route('/stats', stats)
-
-// Include exports routes
 app.route('/exports', exports)
+app.route('/widgets', widgets)
 
 // OpenAPI documentation
 app.get(
