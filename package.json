@@ -1,8 +1,25 @@
 {
     "name": "timefly-backend",
+    "displayName": "TimeFly Dev",
+    "description": "In progress means nothing. This does.",
+    "icon": "timefly_icon.png",
     "version": "1.0.0",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "keywords": [
+        "time tracking",
+        "developer stats",
+        "productivity",
+        "code insights",
+        "VS Code extension"
+    ],
+    "categories": [
+        "Other"
+    ],
+    "license": "Proprietary",
     "scripts": {
-        "dev": "NODE_ENV=development bun run --hot src/index.ts",
+        "dev": "set NODE_ENV=development && bun run --hot src/index.ts",
         "prod": "NODE_ENV=production bun run --hot src/index.ts",
         "build": "bun build ./src/index.ts --outdir ./build --target bun --minify",
         "build:dev": "NODE_ENV=development bun run build",
