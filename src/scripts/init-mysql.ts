@@ -4,6 +4,7 @@ async function initMysql() {
 	try {
 		const connection = await mysqlPool.getConnection()
 
+		// Create users table
 		await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -16,6 +17,7 @@ async function initMysql() {
       )
     `)
 
+		// Create user_settings table
 		await connection.query(`
       CREATE TABLE IF NOT EXISTS user_settings (
         user_id INT PRIMARY KEY,
@@ -23,6 +25,71 @@ async function initMysql() {
         notification_preferences JSON,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
+    `)
+
+		// Create widgets table to store widget types
+		await connection.query(`
+      CREATE TABLE IF NOT EXISTS widgets (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        component_path VARCHAR(255) NOT NULL,
+        default_props JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `)
+
+		// Create user_widgets table to store widget instances
+		await connection.query(`
+      CREATE TABLE IF NOT EXISTS user_widgets (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        widget_id INT NOT NULL,
+        position_x INT NOT NULL DEFAULT 0,
+        position_y INT NOT NULL DEFAULT 0,
+        width INT NOT NULL DEFAULT 1,
+        height INT NOT NULL DEFAULT 1,
+        z_index INT NOT NULL DEFAULT 0,
+        widget_name VARCHAR(100),
+        skin VARCHAR(50) DEFAULT 'outline',
+        time_range VARCHAR(50) DEFAULT 'week',
+        config JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (widget_id) REFERENCES widgets(id) ON DELETE CASCADE
+      )
+    `)
+
+		// Insert default widget types
+		await connection.query(`
+      INSERT IGNORE INTO widgets (name, component_path, default_props) VALUES 
+      ('ClockWidget', 'components/widgets/ClockWidget.vue', '{
+        "hideSettings": false,
+        "widgetIndex": 0,
+        "widgetName": "Clock",
+        "skin": "outline",
+        "timeRange": "week",
+        "widgetDrawerMode": false
+      }'),
+      ('GoalTrackingMosaic', 'components/widgets/GoalTrackingMosaic.vue', '{
+        "hideSettings": false,
+        "widgetIndex": 0,
+        "widgetName": "Goal Tracking",
+        "skin": "outline",
+        "timeRange": "week",
+        "widgetDrawerMode": false,
+        "class": "size-1x2"
+      }'),
+      ('TodaysActivity', 'components/widgets/TodaysActivity.vue', '{
+        "hideSettings": false,
+        "widgetIndex": 0,
+        "widgetName": "Todays Activity",
+        "skin": "outline",
+        "timeRange": "week",
+        "widgetDrawerMode": false,
+        "class": "size-1x2"
+      }')
     `)
 
 		console.log('MySQL tables created successfully')
