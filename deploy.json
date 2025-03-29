@@ -3,7 +3,7 @@
     "subpath": "/timefly",
     "runtime": "bun",
     "buildCommand": "bun run build:prod",
-    "startCommand": "bun run prod",
+    "startCommand": "bun run start:prod",
     "env": {
         "NODE_ENV": "production",
         "PORT": "3000",
