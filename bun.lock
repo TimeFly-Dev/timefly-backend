@@ -5,9 +5,10 @@
       "name": "timefly-backend",
       "dependencies": {
         "@clickhouse/client": "1.10.1",
+        "@hono/oauth-providers": "^0.6.2",
         "@hono/zod-validator": "0.4.3",
         "@scalar/hono-api-reference": "0.5.175",
-        "hono": "4.7.2",
+        "hono": "^4.7.4",
         "hono-openapi": "0.4.4",
         "mysql2": "3.12.0",
         "resend": "^4.1.2",
@@ -85,6 +86,8 @@
     "@commitlint/top-level": ["@commitlint/top-level@19.5.0", "", { "dependencies": { "find-up": "^7.0.0" } }, "sha512-IP1YLmGAk0yWrImPRRc578I3dDUI5A2UBJx9FbSOjxe9sTlzFiwVJ+zeMLgAtHMtGZsC8LUnzmW1qRemkFU4ng=="],
 
     "@commitlint/types": ["@commitlint/types@19.5.0", "", { "dependencies": { "@types/conventional-commits-parser": "^5.0.0", "chalk": "^5.3.0" } }, "sha512-DSHae2obMSMkAtTBSOulg5X7/z+rGLxcXQIkg3OmWvY6wifojge5uVMydfhUvs7yQj+V7jNmRZ2Xzl8GJyqRgg=="],
+
+    "@hono/oauth-providers": ["@hono/oauth-providers@0.6.2", "", { "peerDependencies": { "hono": ">=3.*" } }, "sha512-Uo2Lf+GnaPGebkC4GUQMRD9spIKonav/gWwSapEJhCKQjq1WVxTLIlCykNRhJtcizPCPc6OAV3A9RAYk0kX9XQ=="],
 
     "@hono/zod-validator": ["@hono/zod-validator@0.4.3", "", { "peerDependencies": { "hono": ">=3.9.0", "zod": "^3.19.1" } }, "sha512-xIgMYXDyJ4Hj6ekm9T9Y27s080Nl9NXHcJkOvkXPhubOLj8hZkOL8pDnnXfvCf5xEE8Q4oMFenQUZZREUY2gqQ=="],
 
@@ -218,7 +221,7 @@
 
     "global-directory": ["global-directory@4.0.1", "", { "dependencies": { "ini": "4.1.1" } }, "sha512-wHTUcDUoZ1H5/0iVqEudYW4/kAlN5cZ3j/bXn0Dpbizl9iaUVeWSHqiOjsgk6OW2bkLclbBjzewBz6weQ1zA2Q=="],
 
-    "hono": ["hono@4.7.2", "", {}, "sha512-8V5XxoOF6SI12jkHkzX/6aLBMU5GEF5g387EjVSQipS0DlxWgWGSMeEayY3CRBjtTUQYwLHx9JYouWqKzy2Vng=="],
+    "hono": ["hono@4.7.4", "", {}, "sha512-Pst8FuGqz3L7tFF+u9Pu70eI0xa5S3LPUmrNd5Jm8nTHze9FxLTK9Kaj5g/k4UcwuJSXTP65SyHOPLrffpcAJg=="],
 
     "hono-openapi": ["hono-openapi@0.4.4", "", { "dependencies": { "json-schema-walker": "^2.0.0" }, "peerDependencies": { "@hono/arktype-validator": "^2.0.0", "@hono/effect-validator": "^1.2.0", "@hono/typebox-validator": "^0.2.0 || ^0.3.0", "@hono/valibot-validator": "^0.5.1", "@hono/zod-validator": "^0.4.1", "@sinclair/typebox": "^0.34.9", "@valibot/to-json-schema": "^1.0.0-beta.3", "arktype": "^2.0.0-rc.25", "effect": "^3.11.3", "hono": "^4.6.13", "openapi-types": "^12.1.3", "valibot": "^1.0.0-beta.9", "zod": "^3.23.8", "zod-openapi": "^4.0.0" }, "optionalPeers": ["@hono/arktype-validator", "@hono/effect-validator", "@hono/typebox-validator", "@hono/valibot-validator", "@hono/zod-validator", "@sinclair/typebox", "@valibot/to-json-schema", "arktype", "effect", "hono", "openapi-types", "valibot", "zod", "zod-openapi"] }, "sha512-8UdlOwqGuKwtmGgiUcxRarIi0XOY9ZED+XfpVaZr9un5jl9p9dTLrnIhs1i+eTqvHNHV4QNF0C5bbfxdMBYe+w=="],
 

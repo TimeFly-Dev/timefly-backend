@@ -26,13 +26,28 @@ export async function getUserByGoogleId(googleId: string): Promise<User | null> 
 	const user = rows[0]
 	return user
 		? {
-				id: user.id,
-				googleId: user.google_id,
-				email: user.email,
-				fullName: user.full_name,
-				avatarUrl: user.avatar_url
-			}
+			id: user.id,
+			googleId: user.google_id,
+			email: user.email,
+			fullName: user.full_name,
+			avatarUrl: user.avatar_url
+		}
 		: null
+}
+
+export async function getUserById(id: number): Promise<User> {
+	const [rows] = await mysqlPool.execute<mysql.RowDataPacket[]>(
+		'SELECT id, google_id, email, full_name, avatar_url FROM users WHERE id = ?',
+		[id]
+	)
+	const user = rows[0]
+	return {
+		id: user.id || 0,
+		googleId: user.google_id || '',
+		email: user.email || '',
+		fullName: user.full_name || '',
+		avatarUrl: user.avatar_url || ''
+	}
 }
 
 export async function updateUser(id: number, updates: { email: string; fullName: string; avatarUrl: string }): Promise<void> {

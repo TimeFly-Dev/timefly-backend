@@ -1,8 +1,25 @@
 {
     "name": "timefly-backend",
+    "displayName": "TimeFly Dev",
+    "description": "In progress means nothing. This does.",
+    "icon": "timefly_icon.png",
     "version": "1.0.0",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "keywords": [
+        "time tracking",
+        "developer stats",
+        "productivity",
+        "code insights",
+        "VS Code extension"
+    ],
+    "categories": [
+        "Other"
+    ],
+    "license": "Proprietary",
     "scripts": {
-        "dev": "NODE_ENV=development bun run --hot src/index.ts",
+        "dev": "set NODE_ENV=development && bun run --hot src/index.ts",
         "prod": "NODE_ENV=production bun run --hot src/index.ts",
         "build": "bun build ./src/index.ts --outdir ./build --target bun --minify",
         "build:dev": "NODE_ENV=development bun run build",
@@ -19,9 +36,10 @@
     },
     "dependencies": {
         "@clickhouse/client": "1.10.1",
+        "@hono/oauth-providers": "^0.6.2",
         "@hono/zod-validator": "0.4.3",
         "@scalar/hono-api-reference": "0.5.175",
-        "hono": "4.7.2",
+        "hono": "^4.7.4",
         "hono-openapi": "0.4.4",
         "mysql2": "3.12.0",
         "resend": "^4.1.2",
