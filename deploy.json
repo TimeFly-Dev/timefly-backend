@@ -27,7 +27,7 @@
         "AUTH_LOG_PROCESS_INTERVAL": "5000",
         "RESEND_API_KEY": "re_BdrWBfYU_CDtobgR8ZXXb9fW2cm7ebDrj",
         "EMAIL_FROM": "onboarding@resend.dev",
-        "BASE_URL": "https://vps.ivancavero.com/timefly"
+        "BASE_URL": "https://api.timefly.dev"
     },
     "branch": "main"
 }
