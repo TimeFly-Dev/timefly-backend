@@ -1,0 +1,33 @@
+{
+    "name": "timefly-backend",
+    "domain": "api.timefly.dev",
+    "runtime": "bun",
+    "buildCommand": "bun run build:prod",
+    "startCommand": "bun ./build/index.js",
+    "env": {
+        "NODE_ENV": "production",
+        "PORT": "3001",
+        "CLICKHOUSE_HOST": "localhost",
+        "CLICKHOUSE_PORT": "8123",
+        "CLICKHOUSE_USER": "default",
+        "CLICKHOUSE_PASSWORD": "clickhouse_password",
+        "MYSQL_HOST": "localhost",
+        "MYSQL_PORT": "3306",
+        "MYSQL_ROOT_PASSWORD": "your_mysql_root_password",
+        "MYSQL_DATABASE": "timefly",
+        "MYSQL_USER": "timefly_user",
+        "MYSQL_PASSWORD": "your_mysql_password",
+        "GOOGLE_CLIENT_ID": "41987714842-8fke0g33m79nb7jopmeoq7k9hvii9ntr.apps.googleusercontent.com",
+        "GOOGLE_CLIENT_SECRET": "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",
+        "ACCESS_TOKEN_EXPIRES_IN": "1d",
+        "REFRESH_TOKEN_EXPIRES_IN": "30d",
+        "JWT_ACCESS_SECRET": "your-ACCESS-key",
+        "JWT_REFRESH_SECRET": "your-REFRESH-key",
+        "AUTH_LOG_BATCH_SIZE": "100",
+        "AUTH_LOG_PROCESS_INTERVAL": "5000",
+        "RESEND_API_KEY": "re_BdrWBfYU_CDtobgR8ZXXb9fW2cm7ebDrj",
+        "EMAIL_FROM": "onboarding@resend.dev",
+        "BASE_URL": "https://api.timefly.dev"
+    },
+    "branch": "main"
+}
