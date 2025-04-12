@@ -2,37 +2,66 @@ import { clickhouseClient } from '../db/clickhouse'
 
 async function initClickhouse() {
 	try {
-		// Main time tracking entries table
 		await clickhouseClient.exec({
 			query: `
-        CREATE TABLE IF NOT EXISTS time_entries (
+        CREATE TABLE IF NOT EXISTS pulses (
           id UUID DEFAULT generateUUIDv4(),
           user_id UInt32,
           entity String,
-          type Enum('file' = 1, 'folder' = 2),
-          category Enum('coding' = 1, 'reading' = 2, 'debugging' = 3),
+          type Enum('file' = 1, 'app' = 2, 'domain' = 3),
+          state Enum('coding' = 1, 'debugging' = 2),
+          time DateTime64(3),
+          project String DEFAULT '',
+          project_root_count UInt16 DEFAULT 0,
+          branch String DEFAULT '',
+          language String DEFAULT '',
+          dependencies String DEFAULT '',
+          machine_name_id String,
+          line_additions UInt32 DEFAULT 0,
+          line_deletions UInt32 DEFAULT 0,
+          lines UInt32 DEFAULT 0,
+          lineno UInt32 DEFAULT 0,
+          cursorpos UInt32 DEFAULT 0,
+          is_write UInt8 DEFAULT 0,
+          timezone String,
+          created_at DateTime DEFAULT now()
+        )
+        ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(time)
+        ORDER BY (user_id, time, entity)
+        SETTINGS index_granularity = 8192
+      `
+		})
+
+		await clickhouseClient.exec({
+			query: `
+        CREATE TABLE IF NOT EXISTS aggregated_pulses (
+          id UUID DEFAULT generateUUIDv4(),
+          user_id UInt32,
+          entity String,
+          type Enum('file' = 1, 'app' = 2, 'domain' = 3),
+          state Enum('coding' = 1, 'debugging' = 2),
           start_time DateTime64(3),
           end_time DateTime64(3),
-          project String,
-          branch String,
-          language String,
-          dependencies String,
+          project String DEFAULT '',
+          branch String DEFAULT '',
+          language String DEFAULT '',
+          dependencies String DEFAULT '',
           machine_name_id String,
-          line_additions UInt32,
-          line_deletions UInt32,
-          lines UInt32,
-          is_write Bool,
+          line_additions UInt32 DEFAULT 0,
+          line_deletions UInt32 DEFAULT 0,
+          lines UInt32 DEFAULT 0,
+          is_write UInt8 DEFAULT 0,
           timezone String,
           created_at DateTime DEFAULT now()
         )
         ENGINE = MergeTree()
         PARTITION BY toYYYYMM(start_time)
-        ORDER BY (user_id, start_time, project, language)
+        ORDER BY (user_id, start_time, entity)
         SETTINGS index_granularity = 8192
       `
 		})
 
-		// Daily aggregated statistics view
 		await clickhouseClient.exec({
 			query: `
         CREATE MATERIALIZED VIEW IF NOT EXISTS daily_stats
@@ -50,8 +79,52 @@ async function initClickhouse() {
           sum(line_deletions) as total_deletions,
           sum(lines) as total_lines,
           max(end_time) as last_activity
-        FROM time_entries
+        FROM aggregated_pulses
         GROUP BY user_id, date, project, language
+      `
+		})
+
+		await clickhouseClient.exec({
+			query: `
+        CREATE TABLE IF NOT EXISTS sync_events (
+          id UUID DEFAULT generateUUIDv4(),
+          user_id UInt32,
+          timestamp DateTime64(3),
+          machine_name_id String,
+          pulses_count UInt32,
+          aggregated_pulses_count UInt32,
+          sync_duration_ms UInt32,
+          success Bool,
+          error_message String DEFAULT '',
+          created_at DateTime DEFAULT now()
+        )
+        ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (user_id, timestamp)
+      `
+		})
+
+		// Add new export_events table after sync_events
+		await clickhouseClient.exec({
+			query: `
+        CREATE TABLE IF NOT EXISTS export_events (
+          id UUID DEFAULT generateUUIDv4(),
+          user_id UInt32,
+          timestamp DateTime64(3),
+          entries_count UInt32,
+          file_size_bytes UInt64,
+          processing_time_ms UInt32,
+          start_date DateTime64(3) NULL,
+          end_date DateTime64(3) NULL,
+          expires_at DateTime64(3),
+          email_sent Bool,
+          cleaned_up Bool DEFAULT false,
+          error_message String DEFAULT '',
+          created_at DateTime DEFAULT now()
+        )
+        ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (user_id, timestamp)
       `
 		})
 
@@ -95,50 +168,6 @@ async function initClickhouse() {
           arrayDistinct(groupArray(country_code)) as countries
         FROM auth_logs
         GROUP BY user_id, date, success
-      `
-		})
-
-		// Synchronization events tracking table
-		await clickhouseClient.exec({
-			query: `
-        CREATE TABLE IF NOT EXISTS sync_events (
-          id UUID DEFAULT generateUUIDv4(),
-          user_id UInt32,
-          timestamp DateTime64(3),
-          machine_name_id String,
-          entries_count UInt32,
-          sync_duration_ms UInt32,
-          success Bool,
-          error_message String DEFAULT '',
-          created_at DateTime DEFAULT now()
-        )
-        ENGINE = MergeTree()
-        PARTITION BY toYYYYMM(timestamp)
-        ORDER BY (user_id, timestamp)
-      `
-		})
-
-		// Add new export_events table after sync_events
-		await clickhouseClient.exec({
-			query: `
-        CREATE TABLE IF NOT EXISTS export_events (
-          id UUID DEFAULT generateUUIDv4(),
-          user_id UInt32,
-          timestamp DateTime64(3),
-          entries_count UInt32,
-          file_size_bytes UInt64,
-          processing_time_ms UInt32,
-          start_date DateTime64(3) NULL,
-          end_date DateTime64(3) NULL,
-          expires_at DateTime64(3),
-          email_sent Bool,
-          cleaned_up Bool DEFAULT false,
-          error_message String DEFAULT '',
-          created_at DateTime DEFAULT now()
-        )
-        ENGINE = MergeTree()
-        PARTITION BY toYYYYMM(timestamp)
-        ORDER BY (user_id, timestamp)
       `
 		})
 

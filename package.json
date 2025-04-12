@@ -19,8 +19,8 @@
     ],
     "license": "Proprietary",
     "scripts": {
-        "dev": "set NODE_ENV=development && bun run --hot src/index.ts",
-        "prod": "NODE_ENV=production bun run --hot src/index.ts",
+        "dev": "cross-env NODE_ENV=development bun run --hot src/index.ts",
+        "prod": "cross-env NODE_ENV=production bun run --hot src/index.ts",
         "build": "bun build ./src/index.ts --outdir ./build --target bun --minify",
         "build:dev": "NODE_ENV=development bun run build",
         "build:prod": "NODE_ENV=production bun run build",
@@ -47,10 +47,11 @@
         "zod-openapi": "4.2.3"
     },
     "devDependencies": {
-        "@types/bun": "latest",
+        "@biomejs/biome": "1.9.4",
         "@commitlint/cli": "19.7.1",
         "@commitlint/config-conventional": "19.7.1",
-        "husky": "9.1.7",
-        "@biomejs/biome": "1.9.4"
+        "@types/bun": "latest",
+        "cross-env": "^7.0.3",
+        "husky": "9.1.7"
     }
 }

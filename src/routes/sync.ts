@@ -2,9 +2,9 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { describeRoute } from 'hono-openapi'
 import { resolver, validator as zValidator } from 'hono-openapi/zod'
-import { syncDataSchema, syncResponseSchema } from '@/validations/syncValidations'
-import { syncTimeEntries, logSyncEvent } from '@/services/syncService'
-import { authMiddleware } from '@/middleware/auth'
+import { syncDataSchema, syncResponseSchema } from '../validations/syncValidations'
+import { syncTimeEntries, logSyncEvent } from '../services/syncService'
+import { authMiddleware } from '../middleware/auth'
 
 const sync = new Hono()
 
@@ -13,7 +13,7 @@ sync.use('*', authMiddleware)
 sync.post(
 	'/',
 	describeRoute({
-		description: 'Synchronize time entries',
+		description: 'Synchronize time tracking pulses',
 		tags: ['Synchronization'],
 		responses: {
 			200: {
@@ -57,27 +57,44 @@ sync.post(
 		const startTime = Date.now()
 
 		try {
-			await syncTimeEntries(userId, syncData.data)
+			const { pulsesCount, aggregatedPulsesCount, errors } = await syncTimeEntries(userId, syncData)
 			const endTime = Date.now()
 			const syncDuration = endTime - startTime
+			const totalCount = pulsesCount + aggregatedPulsesCount
 
-			await logSyncEvent(userId, syncData.data.length, syncDuration, true)
+			await logSyncEvent(userId, pulsesCount, aggregatedPulsesCount, syncDuration, errors.length === 0, errors.join('; '))
+
+			if (errors.length > 0) {
+				return c.json(
+					{
+						success: true,
+						message: `Synchronized ${totalCount} entries with ${errors.length} errors.`,
+						syncedCount: totalCount,
+						errors
+					},
+					errors.length === totalCount ? 500 : 207
+				)
+			}
 
 			return c.json({
 				success: true,
-				message: `Successfully synchronized ${syncData.data.length} time entries.`
+				message: `Successfully synchronized ${totalCount} entries (${pulsesCount} pulses, ${aggregatedPulsesCount} aggregated).`,
+				syncedCount: totalCount
 			})
 		} catch (error) {
 			console.error('Sync error:', error)
 
 			const endTime = Date.now()
 			const syncDuration = endTime - startTime
-			await logSyncEvent(userId, syncData.data.length, syncDuration, false, (error as Error).message)
+			const errorMessage = (error as Error).message
+
+			await logSyncEvent(userId, 0, 0, syncDuration, false, errorMessage)
 
 			return c.json(
 				{
 					success: false,
-					message: 'Failed to synchronize time entries.'
+					message: 'Failed to synchronize time entries.',
+					errors: [errorMessage]
 				},
 				500
 			)

@@ -47,12 +47,13 @@ export async function getCodingStats({ userId, startDate, endDate, date, aggrega
 		}
 	}
 
+	// Query the aggregated_pulses table directly
 	const query = `
-		SELECT ${selectClause}
-		FROM time_entries
-		${whereClause}
-		${groupBy}
-	`
+    SELECT ${selectClause}
+    FROM aggregated_pulses
+    ${whereClause}
+    ${groupBy}
+  `
 
 	const result = await clickhouseClient.query({
 		query,
@@ -93,7 +94,7 @@ export async function getTopLanguages({
 	limit?: number
 	period?: 'day' | 'week' | 'month' | 'year' | 'all'
 }): Promise<TopLanguage[]> {
-	let whereClause = `WHERE user_id = ${userId}`
+	let whereClause = `WHERE user_id = ${userId} AND language != ''`
 	let dateFunction: string
 
 	switch (period) {
@@ -124,18 +125,19 @@ export async function getTopLanguages({
 		whereClause += ` AND end_time <= toDateTime('${endDate}')`
 	}
 
+	// Query the aggregated_pulses table directly
 	const query = `
-		SELECT 
-			language,
-			SUM(dateDiff('second', start_time, end_time)) as total_seconds,
-			MAX(end_time) as last_used,
-			argMax(project, end_time) as last_project
-		FROM time_entries
-			${whereClause}
-			GROUP BY language
-			ORDER BY total_seconds DESC
-		LIMIT ${limit}
-	`
+    SELECT 
+      language,
+      SUM(dateDiff('second', start_time, end_time)) as total_seconds,
+      MAX(end_time) as last_used,
+      argMax(project, end_time) as last_project
+    FROM aggregated_pulses
+      ${whereClause}
+      GROUP BY language
+      ORDER BY total_seconds DESC
+    LIMIT ${limit}
+  `
 
 	const result = await clickhouseClient.query({
 		query,
@@ -150,4 +152,24 @@ export async function getTopLanguages({
 		lastUsed: new Date(row.last_used).toISOString(),
 		lastProject: row.last_project
 	}))
+}
+
+// Optional: Add a function to get combined stats from both tables if needed
+export async function getCombinedCodingStats({
+	userId,
+	startDate,
+	endDate,
+	date,
+	aggregation
+}: CodingStatsOptions): Promise<CodingHours[]> {
+	// This function would be useful if you want to include both individual pulses and aggregated pulses
+	// For now, we'll focus on using the aggregated_pulses table for statistics since it's more efficient
+
+	// Implementation would be similar to getCodingStats but with a UNION query
+	// between pulses and aggregated_pulses tables
+
+	// For most statistics purposes, using just the aggregated_pulses table is recommended
+	// as it already contains the summarized data
+
+	return getCodingStats({ userId, startDate, endDate, date, aggregation })
 }
