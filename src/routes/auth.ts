@@ -16,7 +16,7 @@ const googleAuthConfig = {
 	client_id: CONFIG.GOOGLE_CLIENT_ID,
 	client_secret: CONFIG.GOOGLE_CLIENT_SECRET,
 	scope: ['openid', 'email', 'profile'],
-	redirect_uri: 'http://localhost:3000/auth/google/callback'
+	redirect_uri: 'http://localhost:3000/google/callback'
 }
 
 // Helper function to get client IP
@@ -162,7 +162,7 @@ auth.get(
 			const { accessToken, refreshToken } = await generateTokens(dbUser)
 
 			return c.redirect(
-				`http://localhost:3001/google/callback?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`
+				`${googleAuthConfig.redirect_uri}?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`
 			)
 			// return c.json({
 			// 	success: true,

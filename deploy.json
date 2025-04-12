@@ -1,6 +1,6 @@
 {
     "name": "timefly-backend",
-    "subpath": "/timefly",
+    "domain": "api.timefly.dev",
     "runtime": "bun",
     "buildCommand": "bun run build:prod",
     "startCommand": "bun ./build/index.js",
