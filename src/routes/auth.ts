@@ -20,6 +20,8 @@ const googleAuthConfig = {
 	frontend_redirect_uri: CONFIG.GOOGLE_FRONTEND_REDIRECT_URI
 }
 
+// console.log("Goolgle Auth Config:", googleAuthConfig)
+
 // Helper function to get client IP
 const getClientIp = (c: Context): string => {
 	return c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || c.req.header('cf-connecting-ip') || 'unknown'

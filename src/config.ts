@@ -41,7 +41,7 @@ export const CONFIG = {
 	REFRESH_TOKEN_EXPIRES_IN: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
 	GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID as string,
 	GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET as string,
-	GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || 'http://api.timefly.dev/auth/google/callback',
+	GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || 'https://api.timefly.dev/auth/google/callback',
 	GOOGLE_FRONTEND_REDIRECT_URI: process.env.GOOGLE_FRONTEND_REDIRECT_URI || 'https://timefly.dev/google/callback',
 	CLICKHOUSE_HOST: process.env.CLICKHOUSE_HOST as string,
 	CLICKHOUSE_PORT: Number(process.env.CLICKHOUSE_PORT),
