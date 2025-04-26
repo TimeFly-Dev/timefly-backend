@@ -15,5 +15,5 @@ RUN bun test
 
 # run the app
 USER bun
-EXPOSE 3000/tcp
+EXPOSE 3001/tcp
 ENTRYPOINT [ "bun", "run", "src/index.ts" ]

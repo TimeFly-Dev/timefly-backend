@@ -143,6 +143,12 @@ async function initClickhouse() {
           city LowCardinality(String),
           provider Enum('google' = 1, 'github' = 2, 'local' = 3),
           error_message String DEFAULT '',
+          session_id String DEFAULT '',
+          event_type Enum('login' = 1, 'logout' = 2, 'token_refresh' = 3, 'failed' = 4, 'session_created' = 5, 'session_refreshed' = 6, 'session_expired' = 7, 'session_revoked' = 8),
+          device_name String DEFAULT '',
+          device_type String DEFAULT '',
+          browser String DEFAULT '',
+          os String DEFAULT '',
           created_at DateTime DEFAULT now()
         )
         ENGINE = MergeTree()
@@ -157,17 +163,21 @@ async function initClickhouse() {
         CREATE MATERIALIZED VIEW IF NOT EXISTS auth_stats
         ENGINE = SummingMergeTree()
         PARTITION BY toYYYYMM(date)
-        ORDER BY (user_id, date, success)
+        ORDER BY (user_id, date, success, event_type)
         AS SELECT
           user_id,
           toDate(timestamp) as date,
           success,
+          event_type,
           count() as attempts,
           arrayDistinct(groupArray(ip_address)) as unique_ips,
           arrayDistinct(groupArray(user_agent)) as unique_user_agents,
-          arrayDistinct(groupArray(country_code)) as countries
+          arrayDistinct(groupArray(country_code)) as countries,
+          arrayDistinct(groupArray(device_type)) as device_types,
+          arrayDistinct(groupArray(browser)) as browsers,
+          arrayDistinct(groupArray(os)) as operating_systems
         FROM auth_logs
-        GROUP BY user_id, date, success
+        GROUP BY user_id, date, success, event_type
       `
 		})
 
@@ -189,6 +199,43 @@ async function initClickhouse() {
           sum(cleaned_up) as cleaned_up_exports
         FROM export_events
         GROUP BY user_id, date
+      `
+		})
+
+		// API key events table
+		await clickhouseClient.exec({
+			query: `
+        CREATE TABLE IF NOT EXISTS api_key_events (
+          id UUID DEFAULT generateUUIDv4(),
+          user_id UInt32,
+          timestamp DateTime64(3),
+          event_type Enum('created' = 1, 'regenerated' = 2),
+          ip_address String,
+          user_agent String,
+          country_code LowCardinality(String) DEFAULT '',
+          city LowCardinality(String) DEFAULT '',
+          created_at DateTime DEFAULT now()
+        )
+        ENGINE = MergeTree()
+        PARTITION BY toYYYYMM(timestamp)
+        ORDER BY (user_id, timestamp)
+      `
+		})
+
+		// API key statistics materialized view
+		await clickhouseClient.exec({
+			query: `
+        CREATE MATERIALIZED VIEW IF NOT EXISTS api_key_stats
+        ENGINE = SummingMergeTree()
+        PARTITION BY toYYYYMM(date)
+        ORDER BY (user_id, date, event_type)
+        AS SELECT
+          user_id,
+          toDate(timestamp) as date,
+          event_type,
+          count() as event_count
+        FROM api_key_events
+        GROUP BY user_id, date, event_type
       `
 		})
 

@@ -4,12 +4,12 @@ import fs from 'node:fs/promises'
 import { describeRoute } from 'hono-openapi'
 import { resolver, validator as zValidator } from 'hono-openapi/zod'
 import { exportRequestSchema, downloadRequestSchema, exportResponseSchema, downloadResponseSchema } from '@/validations/exportValidations'
-import { authMiddleware } from '@/middleware/auth'
+import { jwtAuthMiddleware } from '@/middleware/jwtAuthMiddleware'
 import { CONFIG } from '@/config'
 
 const exports = new Hono()
 
-exports.use('*', authMiddleware)
+exports.use('*', jwtAuthMiddleware)
 
 const EXPORT_DIR = path.join(process.cwd(), 'exports')
 

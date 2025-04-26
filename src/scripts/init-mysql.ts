@@ -7,14 +7,17 @@ async function initMysql() {
 		// Create users table
 		await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        google_id VARCHAR(255) NOT NULL UNIQUE,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        full_name VARCHAR(255),
-        avatar_url VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          google_id VARCHAR(255) NOT NULL UNIQUE,
+          email VARCHAR(255) NOT NULL UNIQUE,
+          full_name VARCHAR(255),
+          avatar_url VARCHAR(255),
+          api_key VARCHAR(64) UNIQUE,
+          api_key_created_at TIMESTAMP NULL,
+          api_key_last_used_at TIMESTAMP NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
     `)
 
 		// Create user_settings table
@@ -24,6 +27,28 @@ async function initMysql() {
         theme VARCHAR(20) DEFAULT 'light',
         notification_preferences JSON,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `)
+
+		// Create user_sessions table to track active sessions
+		await connection.query(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id VARCHAR(64) PRIMARY KEY,
+        user_id INT NOT NULL,
+        refresh_token VARCHAR(255) NOT NULL,
+        device_name VARCHAR(255),
+        device_type VARCHAR(64),
+        browser VARCHAR(64),
+        os VARCHAR(64),
+        ip_address VARCHAR(45),
+        last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL,
+        is_revoked BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX (user_id),
+        INDEX (expires_at),
+        INDEX (is_revoked)
       )
     `)
 

@@ -1,80 +1,149 @@
-// Ensure that NODE_ENV is set
-if (!process.env.NODE_ENV) {
-	console.warn('NODE_ENV not set. Defaulting to development.')
-	process.env.NODE_ENV = 'development'
+import type { AppConfig, EnvVarDefinitions } from './types/config'
+
+/**
+ * Environment variable definitions with types, requirements, and defaults
+ */
+const ENV_VARS: EnvVarDefinitions = {
+	// Server configuration
+	NODE_ENV: { type: 'string', required: false, default: 'development' },
+	PORT: { type: 'number', required: true },
+	FRONTEND_URL: { type: 'string', required: false, default: 'http://localhost:3000' },
+	DEBUG_MODE: { type: 'boolean', required: false, default: false },
+
+	// Authentication configuration
+	JWT_ACCESS_SECRET: { type: 'string', required: true },
+	JWT_REFRESH_SECRET: { type: 'string', required: true },
+	ACCESS_TOKEN_EXPIRES_IN: { type: 'string', required: false, default: '15m' },
+	REFRESH_TOKEN_EXPIRES_IN: { type: 'string', required: false, default: '7d' },
+
+	// OAuth configuration
+	GOOGLE_CLIENT_ID: { type: 'string', required: true },
+	GOOGLE_CLIENT_SECRET: { type: 'string', required: true },
+
+	// MySQL configuration
+	MYSQL_HOST: { type: 'string', required: true },
+	MYSQL_PORT: { type: 'number', required: true },
+	MYSQL_USER: { type: 'string', required: true },
+	MYSQL_PASSWORD: { type: 'string', required: true },
+	MYSQL_DATABASE: { type: 'string', required: true },
+
+	// ClickHouse configuration
+	CLICKHOUSE_HOST: { type: 'string', required: true },
+	CLICKHOUSE_PORT: { type: 'number', required: true },
+	CLICKHOUSE_USER: { type: 'string', required: true },
+	CLICKHOUSE_PASSWORD: { type: 'string', required: true },
+
+	// Email configuration
+	RESEND_API_KEY: { type: 'string', required: true },
+	EMAIL_FROM: { type: 'string', required: true },
+
+	// Logging configuration
+	AUTH_LOG_BATCH_SIZE: { type: 'number', required: false, default: 100 },
+	AUTH_LOG_PROCESS_INTERVAL: { type: 'number', required: false, default: 5000 }
 }
 
-const requiredEnvVars = [
-	'PORT',
-	'ACCESS_TOKEN_EXPIRES_IN',
-	'REFRESH_TOKEN_EXPIRES_IN',
-	'JWT_ACCESS_SECRET',
-	'JWT_REFRESH_SECRET',
-	'GOOGLE_CLIENT_ID',
-	'GOOGLE_CLIENT_SECRET',
-	'CLICKHOUSE_HOST',
-	'CLICKHOUSE_PORT',
-	'CLICKHOUSE_USER',
-	'CLICKHOUSE_PASSWORD',
-	'MYSQL_HOST',
-	'MYSQL_PORT',
-	'MYSQL_USER',
-	'MYSQL_PASSWORD',
-	'MYSQL_DATABASE',
-	'RESEND_API_KEY',
-	'EMAIL_FROM'
-]
+/**
+ * Parse an environment variable based on its type definition
+ * @param name - Environment variable name
+ * @param definition - Environment variable definition
+ * @returns Parsed value
+ */
+const parseEnvVar = (name: string, definition: EnvVarDefinitions[string]): string | number | boolean => {
+	const value = process.env[name]
 
-// Validate required environment variables
-for (const envVar of requiredEnvVars) {
-	if (!process.env[envVar]) {
-		throw new Error(`Missing required environment variable: ${envVar}`)
+	// Check if required and missing
+	if (definition.required && value === undefined) {
+		throw new Error(`Missing required environment variable: ${name}`)
 	}
-}
 
-export const CONFIG = {
-	NODE_ENV: process.env.NODE_ENV as string,
-	PORT: Number(process.env.PORT),
-	JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET as string,
-	JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET as string,
-	ACCESS_TOKEN_EXPIRES_IN: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m',
-	REFRESH_TOKEN_EXPIRES_IN: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
-	GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID as string,
-	GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET as string,
-	CLICKHOUSE_HOST: process.env.CLICKHOUSE_HOST as string,
-	CLICKHOUSE_PORT: Number(process.env.CLICKHOUSE_PORT),
-	CLICKHOUSE_USER: process.env.CLICKHOUSE_USER as string,
-	CLICKHOUSE_PASSWORD: process.env.CLICKHOUSE_PASSWORD as string,
-	MYSQL_HOST: process.env.MYSQL_HOST as string,
-	MYSQL_PORT: Number(process.env.MYSQL_PORT),
-	MYSQL_USER: process.env.MYSQL_USER as string,
-	MYSQL_PASSWORD: process.env.MYSQL_PASSWORD as string,
-	MYSQL_DATABASE: process.env.MYSQL_DATABASE as string,
-	AUTH_LOG_BATCH_SIZE: Number(process.env.AUTH_LOG_BATCH_SIZE || '100'),
-	AUTH_LOG_PROCESS_INTERVAL: Number(process.env.AUTH_LOG_PROCESS_INTERVAL || '5000'),
-	RESEND_API_KEY: process.env.RESEND_API_KEY as string,
-	EMAIL_FROM: process.env.EMAIL_FROM as string,
-	BASE_URL: process.env.BASE_URL || 'http://localhost:3000'
-}
-
-// Type assertion to ensure all config values are defined
-const assertConfig: Record<keyof typeof CONFIG, string | number> = CONFIG
-
-// Validate that all config values are defined and of the correct type
-Object.entries(assertConfig).forEach(([key, value]) => {
-	if (value === undefined) {
-		throw new Error(`Configuration value for ${key} is undefined`)
+	// Use default if value is missing
+	if (value === undefined && definition.default !== undefined) {
+		return definition.default
 	}
-	if (['RESEND_API_KEY', 'EMAIL_FROM'].includes(key)) {
-		if (typeof value !== 'string') {
-			throw new Error(`Configuration value for ${key} is not a valid string`)
+
+	// Parse value based on type
+	switch (definition.type) {
+		case 'number': {
+			const num = Number(value)
+			if (Number.isNaN(num)) {
+				throw new Error(`Environment variable ${name} must be a number`)
+			}
+			return num
 		}
+		case 'boolean':
+			return value === 'true'
+		case 'string':
+			return value || ''
+		default:
+			return value || ''
 	}
-	if (['PORT', 'CLICKHOUSE_PORT', 'MYSQL_PORT', 'AUTH_LOG_BATCH_SIZE', 'AUTH_LOG_PROCESS_INTERVAL'].includes(key)) {
-		if (typeof value !== 'number' || Number.isNaN(value)) {
-			throw new Error(`Configuration value for ${key} is not a valid number`)
-		}
-	} else if (typeof value !== 'string') {
-		throw new Error(`Configuration value for ${key} is not a string`)
+}
+
+/**
+ * Verify that all required properties for AppConfig are present
+ * @param config - Configuration object to verify
+ */
+const verifyConfigProperties = (config: Record<string, unknown>): void => {
+	// Get all keys from AppConfig type using a dummy object
+	const requiredKeys: Array<keyof AppConfig> = [
+		'NODE_ENV',
+		'PORT',
+		'BASE_URL',
+		'FRONTEND_URL',
+		'DEBUG_MODE',
+		'JWT_ACCESS_SECRET',
+		'JWT_REFRESH_SECRET',
+		'ACCESS_TOKEN_EXPIRES_IN',
+		'REFRESH_TOKEN_EXPIRES_IN',
+		'GOOGLE_CLIENT_ID',
+		'GOOGLE_CLIENT_SECRET',
+		'MYSQL_HOST',
+		'MYSQL_PORT',
+		'MYSQL_USER',
+		'MYSQL_PASSWORD',
+		'MYSQL_DATABASE',
+		'CLICKHOUSE_HOST',
+		'CLICKHOUSE_PORT',
+		'CLICKHOUSE_USER',
+		'CLICKHOUSE_PASSWORD',
+		'RESEND_API_KEY',
+		'EMAIL_FROM',
+		'AUTH_LOG_BATCH_SIZE',
+		'AUTH_LOG_PROCESS_INTERVAL'
+	]
+
+	// Check that all required keys are present
+	const missingKeys = requiredKeys.filter((key) => !(key in config))
+	if (missingKeys.length > 0) {
+		throw new Error(`Missing required configuration properties: ${missingKeys.join(', ')}`)
 	}
-})
+}
+
+/**
+ * Load and validate all environment variables
+ * @returns Validated configuration object
+ */
+const loadConfig = (): AppConfig => {
+	// Parse all environment variables using a functional approach without spread
+	const parsedEntries = Object.entries(ENV_VARS).map(([name, definition]) => [name, parseEnvVar(name, definition)])
+
+	const parsedConfig = Object.fromEntries(parsedEntries)
+
+	// Calculate BASE_URL from PORT if not provided
+	const port = parsedConfig.PORT as number
+	const baseUrl = process.env.BASE_URL || `http://localhost:${port}`
+
+	// Add BASE_URL to config without using spread
+	const finalConfig = Object.assign({}, parsedConfig, { BASE_URL: baseUrl })
+
+	// Verify that all required properties are present
+	verifyConfigProperties(finalConfig)
+
+	// Now we can safely assert the type
+	return finalConfig as AppConfig
+}
+
+/**
+ * Application configuration
+ */
+export const CONFIG = loadConfig()

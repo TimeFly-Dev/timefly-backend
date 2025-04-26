@@ -4,17 +4,19 @@ import { describeRoute } from 'hono-openapi'
 import { resolver, validator as zValidator } from 'hono-openapi/zod'
 import { syncDataSchema, syncResponseSchema } from '../validations/syncValidations'
 import { syncTimeEntries, logSyncEvent } from '../services/syncService'
-import { authMiddleware } from '../middleware/auth'
+import { apiKeyAuthMiddleware } from '../middleware/apiKeyAuthMiddleware.ts'
 
 const sync = new Hono()
 
-sync.use('*', authMiddleware)
+// Use API key authentication for sync endpoints
+sync.use('*', apiKeyAuthMiddleware)
 
 sync.post(
 	'/',
 	describeRoute({
 		description: 'Synchronize time tracking pulses',
 		tags: ['Synchronization'],
+		security: [{ apiKeyAuthMiddleware: [] }],
 		responses: {
 			200: {
 				description: 'Synchronization successful',

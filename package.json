@@ -35,21 +35,21 @@
         "generate-massive-data": "bun run src/scripts/generate-massive-sample-data.ts"
     },
     "dependencies": {
-        "@clickhouse/client": "1.10.1",
-        "@hono/oauth-providers": "^0.6.2",
+        "@clickhouse/client": "1.11.1",
+        "@hono/oauth-providers": "^0.7.1",
         "@hono/zod-validator": "0.4.3",
-        "@scalar/hono-api-reference": "0.5.175",
-        "hono": "^4.7.4",
-        "hono-openapi": "0.4.4",
-        "mysql2": "3.12.0",
-        "resend": "^4.1.2",
-        "zod": "3.24.2",
-        "zod-openapi": "4.2.3"
+        "@scalar/hono-api-reference": "0.8.5",
+        "hono": "^4.7.7",
+        "hono-openapi": "0.4.6",
+        "mysql2": "3.14.0",
+        "resend": "^4.4.1",
+        "zod": "3.24.3",
+        "zod-openapi": "4.2.4"
     },
     "devDependencies": {
         "@biomejs/biome": "1.9.4",
-        "@commitlint/cli": "19.7.1",
-        "@commitlint/config-conventional": "19.7.1",
+        "@commitlint/cli": "19.8.0",
+        "@commitlint/config-conventional": "19.8.0",
         "@types/bun": "latest",
         "cross-env": "^7.0.3",
         "husky": "9.1.7"

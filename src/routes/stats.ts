@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { getCodingStats, getTopLanguages } from '../services/statsService'
-import { authMiddleware } from '../middleware/auth'
+import { jwtAuthMiddleware } from '../middleware/jwtAuthMiddleware'
 import {
 	codingStatsSchema,
 	codingStatsResponseSchema,
@@ -14,13 +14,14 @@ import { resolver } from 'hono-openapi/zod'
 
 const stats = new Hono()
 
-stats.use('*', authMiddleware)
+stats.use('*', jwtAuthMiddleware)
 
 stats.get(
 	'/coding-hours',
 	describeRoute({
 		description: 'Get coding hours statistics for a user',
 		tags: ['Statistics'],
+		security: [{ bearerAuth: [] }],
 		responses: {
 			200: {
 				description: 'Successful response',
@@ -57,6 +58,7 @@ stats.get(
 	describeRoute({
 		description: 'Get top programming languages statistics for a user',
 		tags: ['Statistics'],
+		security: [{ bearerAuth: [] }],
 		responses: {
 			200: {
 				description: 'Successful response',

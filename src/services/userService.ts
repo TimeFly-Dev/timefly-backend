@@ -1,24 +1,29 @@
 import { mysqlPool } from '@/db/mysql'
 import type mysql from 'mysql2/promise'
+import { createApiKey } from './apiKeyService'
+import type { DbUser } from '@/types/auth'
 
-interface User {
-	id: number
-	googleId: string
-	email: string
-	fullName: string
-	avatarUrl: string
+export async function createUser(user: Omit<DbUser, 'id'>): Promise<DbUser> {
+	const connection = await mysqlPool.getConnection()
+
+	try {
+		const [result] = await connection.execute<mysql.ResultSetHeader>(
+			'INSERT INTO users (google_id, email, full_name, avatar_url) VALUES (?, ?, ?, ?)',
+			[user.googleId, user.email, user.fullName, user.avatarUrl]
+		)
+
+		const userId = result.insertId
+
+		// Generate API key for the new user
+		await createApiKey(userId)
+
+		return { id: userId, ...user }
+	} finally {
+		connection.release()
+	}
 }
 
-export async function createUser(user: Omit<User, 'id'>): Promise<User> {
-	const [result] = await mysqlPool.execute<mysql.ResultSetHeader>(
-		'INSERT INTO users (google_id, email, full_name, avatar_url) VALUES (?, ?, ?, ?)',
-		[user.googleId, user.email, user.fullName, user.avatarUrl]
-	)
-	const insertId = result.insertId
-	return { id: insertId, ...user }
-}
-
-export async function getUserByGoogleId(googleId: string): Promise<User | null> {
+export async function getUserByGoogleId(googleId: string): Promise<DbUser | null> {
 	const [rows] = await mysqlPool.execute<mysql.RowDataPacket[]>(
 		'SELECT id, google_id, email, full_name, avatar_url FROM users WHERE google_id = ?',
 		[googleId]
@@ -26,16 +31,16 @@ export async function getUserByGoogleId(googleId: string): Promise<User | null> 
 	const user = rows[0]
 	return user
 		? {
-			id: user.id,
-			googleId: user.google_id,
-			email: user.email,
-			fullName: user.full_name,
-			avatarUrl: user.avatar_url
-		}
+				id: user.id,
+				googleId: user.google_id,
+				email: user.email,
+				fullName: user.full_name,
+				avatarUrl: user.avatar_url
+			}
 		: null
 }
 
-export async function getUserById(id: number): Promise<User> {
+export async function getUserById(id: number): Promise<DbUser> {
 	const [rows] = await mysqlPool.execute<mysql.RowDataPacket[]>(
 		'SELECT id, google_id, email, full_name, avatar_url FROM users WHERE id = ?',
 		[id]
