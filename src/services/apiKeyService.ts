@@ -155,12 +155,12 @@ export const validateApiKey = async (apiKey: string): Promise<number | null> => 
 	const connection = await mysqlPool.getConnection()
 
 	try {
-		logger.debug(`Validating API key: ${apiKey.substring(0, 8)}...`)
+		logger.debug(`Validating API key: ${apiKey}`)
 
 		const [rows] = await connection.execute<mysql.RowDataPacket[]>('SELECT id FROM users WHERE api_key = ?', [apiKey])
 
 		if (rows.length === 0) {
-			logger.warn(`Invalid API key attempt: ${apiKey.substring(0, 8)}...`)
+			logger.warn(`Invalid API key attempt: ${apiKey}`)
 			return null
 		}
 
@@ -170,7 +170,7 @@ export const validateApiKey = async (apiKey: string): Promise<number | null> => 
 		logger.debug(`API key validated successfully for user: ${rows[0].id}`)
 		return rows[0].id
 	} catch (error) {
-		logger.error(`Error validating API key: ${apiKey.substring(0, 8)}...`, error)
+		logger.error(`Error validating API key: ${apiKey}`, error)
 		throw error
 	} finally {
 		connection.release()

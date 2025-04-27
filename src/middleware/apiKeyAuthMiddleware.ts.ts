@@ -16,32 +16,47 @@ export const apiKeyAuthMiddleware = async (c: Context, next: Next) => {
 	// First try to authenticate with API key
 	const apiKey = c.req.header('X-API-Key')
 
+	logger.info(`API Key authentication attempt with key: ${apiKey ? `${apiKey}` : 'none'}`)
+
 	if (apiKey) {
-		const userId = await validateApiKey(apiKey)
+		try {
+			const userId = await validateApiKey(apiKey)
 
-		if (userId) {
-			const user = await getUserById(userId)
+			if (userId) {
+				const user = await getUserById(userId)
 
-			if (user) {
-				// Set user in context for downstream handlers
-				c.set('userId', userId)
+				if (user) {
+					// Set user in context for downstream handlers
+					c.set('userId', userId)
 
-				// Convert to UserContext
-				const userContext: UserContext = {
-					id: user.id,
-					email: user.email,
-					fullName: user.fullName,
-					avatarUrl: user.avatarUrl
+					// Convert to UserContext
+					const userContext: UserContext = {
+						id: user.id,
+						email: user.email,
+						fullName: user.fullName,
+						avatarUrl: user.avatarUrl
+					}
+					c.set('user', userContext)
+
+					logger.info(`API Key authentication successful for user: ${userId}`)
+					await next()
+					return
 				}
-				c.set('user', userContext)
 
-				logger.debug(`API Key authentication successful for user: ${userId}`)
-				await next()
-				return
+				logger.warn(`User not found for valid API key: ${apiKey}`)
+			} else {
+				logger.warn(`Invalid API Key authentication attempt: ${apiKey}`)
 			}
+		} catch (error) {
+			logger.error(`Error during API key authentication: ${error instanceof Error ? error.message : String(error)}`)
+			return c.json(
+				{
+					success: false,
+					error: 'Authentication error. Please try again later.'
+				},
+				500
+			)
 		}
-
-		logger.warn(`Invalid API Key authentication attempt: ${apiKey.substring(0, 8)}...`)
 	}
 
 	// If no API key or invalid, try to authenticate with cookie
