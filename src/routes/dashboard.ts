@@ -5,8 +5,8 @@ import { describeRoute } from 'hono-openapi'
 import { resolver } from 'hono-openapi/zod'
 import { z } from 'zod'
 import {
-	todaysActivitySchema,
-	todaysActivityResponseSchema,
+	widgetsSchema,
+	widgetsResponseSchema,
 	totalTimeSchema,
 	totalTimeResponseSchema,
 	mostActiveWeekdaySchema,
@@ -14,77 +14,42 @@ import {
 	topItemsSchema,
 	topItemsResponseSchema
 } from '../validations/widgetValidations'
+import { getWidgets } from '@/services/widgetsService'
 
-const widgets = new Hono()
+const dashboard = new Hono()
 
-widgets.use('*', jwtAuthMiddleware)
+// Replace by new Cookies middleware
+// dashboard.use('*', jwtAuthMiddleware)
 
-widgets.get(
-	'/todays-activity',
+dashboard.get(
+	'/widgets',
 	describeRoute({
-		description: 'Get users today activity',
+		description: 'Get all available widgets',
 		tags: ['Widgets'],
 		responses: {
 			200: {
 				description: 'Successful response',
 				content: {
 					'application/json': {
-						schema: resolver(todaysActivityResponseSchema)
+						schema: resolver(widgetsResponseSchema)
 					}
 				}
 			}
 		}
 	}),
-	zValidator('query', todaysActivitySchema),
+	// zValidator('query', widgetsSchema),
 	async (c) => {
-		// const userId = c.get('userId')
-		// const { date } = c.req.valid('query')
-
 		try {
-			const now = new Date()
-			const oneHourAgo = new Date(now.getTime() - 3600000)
-			const twoHoursAgo = new Date(now.getTime() - 7200000)
-
-			const hardcodedData = {
-				data: {
-					computed: {
-						reading: 2000,
-						coding: 140,
-						debbuging: 543
-					},
-					timeline: [
-						{
-							start: twoHoursAgo.toISOString(),
-							end: oneHourAgo.toISOString(),
-							project: 'timefly-backend',
-							time: 59
-						},
-						{
-							start: oneHourAgo.toISOString(),
-							end: now.toISOString(),
-							project: 'timefly-frontend',
-							time: 45
-						}
-					]
-				}
-			}
-
-			return c.json(hardcodedData)
+			const widgets = await getWidgets()
+			return c.json({ data: widgets })
 		} catch (error) {
-			console.error("Error fetching today's activity:", error)
-			return c.json(
-				{
-					data: {
-						error: "Failed to fetch today's activity"
-					}
-				},
-				500
-			)
+			console.error("Error in GET /widgets:", error)
+			return c.json({ data: { error: "Failed to fetch widgets" }}, 500)
 		}
 	}
 )
 
-widgets.get(
+dashboard.get(
 	'/total-time',
 	describeRoute({
 		description: "Get user's total tracked time",
@@ -129,7 +94,7 @@ widgets.get(
 	}
 )
 
-widgets.get(
+dashboard.get(
 	'/most-active-weekday',
 	describeRoute({
 		description: "Get user's most active weekday",
@@ -173,7 +138,7 @@ widgets.get(
 	}
 )
 
-widgets.get(
+dashboard.get(
 	'/topItems/:item',
 	describeRoute({
 		description: 'Get top items by time spent',
@@ -258,4 +223,4 @@ widgets.get(
 	}
 )
 
-export { widgets }
+export { dashboard }

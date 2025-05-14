@@ -1,31 +1,22 @@
 import { z } from 'zod'
 import 'zod-openapi/extend'
 
-export const todaysActivitySchema = z
-  .object({
-    date: z.string().optional().describe('Date for the activity (YYYY-MM-DD)')
-  })
-  .openapi({ ref: 'TodaysActivityOptions' })
 
-export const todaysActivityResponseSchema = z
+// GET /widgets
+export const widgetsSchema = z
+  .object({})
+  .openapi({ ref: 'WidgetsOptions' })
+export const widgetsResponseSchema = z
   .object({
-    data: z.object({
-      computed: z.object({
-        reading: z.number(),
-        coding: z.number(),
-        debbuging: z.number()
-      }),
-      timeline: z.array(
-        z.object({
-          start: z.string(),
-          end: z.string(),
-          project: z.string(),
-          time: z.number()
-        })
-      )
-    })
+    data: z.array(
+      z.object({
+        uuid: z.string(),
+        name: z.string(),
+        query: z.string(),
+      })
+    )
   })
-  .openapi({ ref: 'TodaysActivityResponse' })
+  .openapi({ ref: 'WidgetsResponse' });
 
 export const totalTimeSchema = z
   .object({})
@@ -57,22 +48,22 @@ export const mostActiveWeekdayResponseSchema = z
   })
   .openapi({ ref: 'MostActiveWeekdayResponse' })
 
-  export const topItemsSchema = z
-	.object({
-		item: z.enum(['machines', 'projects', 'languages', 'operativeSystems', 'entities'])
-			.describe('Item type for which to retrieve top entries'),
-		limit: z.number().optional().default(5)
-			.describe('Number of top items to return')
-	})
-	.openapi({ ref: 'TopItemsOptions' })
+export const topItemsSchema = z
+  .object({
+    item: z.enum(['machines', 'projects', 'languages', 'operativeSystems', 'entities'])
+      .describe('Item type for which to retrieve top entries'),
+    limit: z.number().optional().default(5)
+      .describe('Number of top items to return')
+  })
+  .openapi({ ref: 'TopItemsOptions' })
 
 export const topItemsResponseSchema = z
-	.object({
-		data: z.array(
-			z.object({
-				item: z.string(),
-				time: z.number()
-			})
-		)
-	})
-	.openapi({ ref: 'TopItemsResponse' })
+  .object({
+    data: z.array(
+      z.object({
+        item: z.string(),
+        time: z.number()
+      })
+    )
+  })
+  .openapi({ ref: 'TopItemsResponse' })
