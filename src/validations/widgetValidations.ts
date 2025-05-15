@@ -18,20 +18,38 @@ export const widgetsResponseSchema = z
   })
   .openapi({ ref: 'WidgetsResponse' });
 
-export const totalTimeSchema = z
-  .object({})
-  .openapi({ ref: 'TotalTimeOptions' })
-
-export const totalTimeResponseSchema = z
+// GET /user-widgets
+export const userWidgetsSchema = z
   .object({
-    data: z.object({
-      totalTime: z.number().describe('Total time in minutes'),
-      totalTimeInDays: z.number().describe('Total time in days'),
-      totalTimeInMonths: z.number().describe('Total time in months'),
-      totalTimeInYears: z.number().describe('Total time in years')
-    })
+    userUuid: z.string().describe('UUID of the user for which to retrieve the widgets')
   })
-  .openapi({ ref: 'TotalTimeResponse' })
+  .openapi({ ref: 'UserWidgetsOptions' })
+  export const userWidgetsResponseSchema = z
+  .object({
+    data: z.array(
+      z.object({
+        uuid: z.string(),
+        widgetUuid: z.string(),
+        widgetName: z.string(),
+        widgetQuery: z.string(),
+        created: z.string(),
+        props: z.object({
+          skin: z.string(),
+          timeRange: z.string()
+        }),
+        widgetData: z.object({})
+      })
+    )
+  })
+  .openapi({ ref: 'UserWidgetsResponse' })
+
+
+
+
+
+
+
+
 
 export const mostActiveWeekdaySchema = z
   .object({
