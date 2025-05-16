@@ -24,7 +24,7 @@ export const userWidgetsSchema = z
     userUuid: z.string().describe('UUID of the user for which to retrieve the widgets')
   })
   .openapi({ ref: 'UserWidgetsOptions' })
-  export const userWidgetsResponseSchema = z
+export const userWidgetsResponseSchema = z
   .object({
     data: z.array(
       z.object({
@@ -33,55 +33,65 @@ export const userWidgetsSchema = z
         widgetName: z.string(),
         widgetQuery: z.string(),
         created: z.string(),
-        props: z.object({
-          skin: z.string(),
-          timeRange: z.string()
-        }),
+        props: z.object({}),
         widgetData: z.object({})
       })
     )
   })
   .openapi({ ref: 'UserWidgetsResponse' })
 
-
-
-
-
-
-
-
-
-export const mostActiveWeekdaySchema = z
+// POST /user-widget
+export const postUserWidgetSchema = z
   .object({
-    weeks: z.number().optional().describe('Number of weeks to consider for the calculation')
+    userUuid: z.string().describe('UUID of the user'),
+    widgetUuid: z.string().describe('UUID of the widget to insert'),
+    props: z.object({}).describe('Widget props (e.g. skin, timeRange)')
   })
-  .openapi({ ref: 'MostActiveWeekdayOptions' })
+  .openapi({ ref: 'PostUserWidgetOptions' })
 
-export const mostActiveWeekdayResponseSchema = z
-  .object({
-    data: z.object({
-      weekDay: z.string(),
-      averageHoursWorked: z.number()
-    })
-  })
-  .openapi({ ref: 'MostActiveWeekdayResponse' })
-
-export const topItemsSchema = z
-  .object({
-    item: z.enum(['machines', 'projects', 'languages', 'operativeSystems', 'entities'])
-      .describe('Item type for which to retrieve top entries'),
-    limit: z.number().optional().default(5)
-      .describe('Number of top items to return')
-  })
-  .openapi({ ref: 'TopItemsOptions' })
-
-export const topItemsResponseSchema = z
+export const postUserWidgetResponseSchema = z
   .object({
     data: z.array(
       z.object({
-        item: z.string(),
-        time: z.number()
+        uuid: z.string(),
+        widgetUuid: z.string(),
+        widgetName: z.string(),
+        widgetQuery: z.string(),
+        created: z.string(),
+        props: z.object({}),
+        widgetData: z.object({})
       })
     )
   })
-  .openapi({ ref: 'TopItemsResponse' })
+
+// PUT /user-widget
+export const putUserWidgetSchema = z
+  .object({
+    userUuid: z.string().describe('UUID of the user'),
+    widgetUuid: z.string().describe('UUID of the widget to update'),
+    props: z.object({}).describe('Widget props (e.g. skin, timeRange)')
+  })
+  .openapi({ ref: 'PutUserWidgetOptions' })
+
+export const putUserWidgetResponseSchema = z
+  .object({
+    data: z.array(
+      z.object({
+        uuid: z.string(),
+        widgetUuid: z.string(),
+        widgetName: z.string(),
+        widgetQuery: z.string(),
+        created: z.string(),
+        props: z.object({}),
+        widgetData: z.object({})
+      })
+    )
+  })
+
+  // DELETE /user-widget
+export const deleteUserWidgetSchema = z
+  .object({
+    userUuid: z.string().describe('UUID of the user'),
+    widgetUuid: z.string().describe('UUID of the widget to delete')
+  })
+  .openapi({ ref: 'DeleteUserWidgetOptions' })

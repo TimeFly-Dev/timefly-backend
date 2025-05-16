@@ -5,16 +5,13 @@ import { describeRoute } from 'hono-openapi'
 import { resolver } from 'hono-openapi/zod'
 import { z } from 'zod'
 import {
-	widgetsSchema,
 	widgetsResponseSchema,
 	userWidgetsSchema,
 	userWidgetsResponseSchema,
-	mostActiveWeekdaySchema,
-	mostActiveWeekdayResponseSchema,
-	topItemsSchema,
-	topItemsResponseSchema
+	postUserWidgetSchema,
+	postUserWidgetResponseSchema,
 } from '../validations/widgetValidations'
-import { getWidgets, getUserWidgets } from '@/services/widgetsService'
+import { getWidgets, getUserWidgets, postUserWidget } from '@/services/widgetsService'
 
 const dashboard = new Hono()
 
@@ -69,6 +66,44 @@ dashboard.get(
 	async (c) => {
 		try {
 			const response = await getUserWidgets(c.req.query("userUuid"))
+
+			return c.json({
+				data: response
+			})
+		} catch (error) {
+			console.error('Error fetching user widgets:', error)
+			return c.json(
+				{
+					data: {
+						error: 'Failed to fetch user widgets'
+					}
+				},
+				500
+			)
+		}
+	}
+)
+
+dashboard.post(
+	'/user-widget',
+	describeRoute({
+		description: "Insert a users_has_widgets record",
+		tags: ['Dashboard'],
+		responses: {
+			200: {
+				description: 'Successful response',
+				content: {
+					'application/json': {
+						schema: resolver(postUserWidgetResponseSchema)
+					}
+				}
+			}
+		}
+	}),
+	zValidator('query', postUserWidgetSchema),
+	async (c) => {
+		try {
+			const response = await postUserWidget(c.req.body)
 
 			return c.json({
 				data: response
