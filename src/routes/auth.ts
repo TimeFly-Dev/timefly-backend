@@ -214,7 +214,8 @@ auth.get(
 
 			logger.info(`Authentication successful for user: ${dbUser.id}, redirecting to frontend`)
 			// Redirect to frontend after successful authentication
-			return c.redirect(`${CONFIG.FRONTEND_URL}/auth/callback?success=true`)
+			console.log("Redirecting to FRONTEND: ", CONFIG.FRONTEND_URL)
+			return c.redirect(`${CONFIG.FRONTEND_URL}/callback?success=true`)
 		} catch (error) {
 			logger.error('Authentication error:', error)
 

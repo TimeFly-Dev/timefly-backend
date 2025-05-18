@@ -10,7 +10,7 @@ import { auth } from './routes/auth'
 import { sync } from './routes/sync'
 import { stats } from './routes/stats'
 import { exports } from './routes/exports'
-import { widgets } from './routes/widgets'
+import { dashboard } from './routes/dashboard'
 import { apiKeys } from './routes/apiKeys'
 import { apiKeyStats } from './routes/apiKeyStats'
 import { authStats } from './routes/authStats'
@@ -43,11 +43,12 @@ app.route('/auth', auth)
 app.route('/sync', sync)
 app.route('/stats', stats)
 app.route('/exports', exports)
-app.route('/widgets', widgets)
 app.route('/api-keys', apiKeys)
 app.route('/api-key-stats', apiKeyStats)
 app.route('/auth-stats', authStats)
 app.route('/sessions', sessions)
+app.route('/dashboard', dashboard)
+
 
 // OpenAPI documentation
 app.get(

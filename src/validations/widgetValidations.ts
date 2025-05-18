@@ -1,78 +1,97 @@
 import { z } from 'zod'
 import 'zod-openapi/extend'
 
-export const todaysActivitySchema = z
-  .object({
-    date: z.string().optional().describe('Date for the activity (YYYY-MM-DD)')
-  })
-  .openapi({ ref: 'TodaysActivityOptions' })
 
-export const todaysActivityResponseSchema = z
-  .object({
-    data: z.object({
-      computed: z.object({
-        reading: z.number(),
-        coding: z.number(),
-        debbuging: z.number()
-      }),
-      timeline: z.array(
-        z.object({
-          start: z.string(),
-          end: z.string(),
-          project: z.string(),
-          time: z.number()
-        })
-      )
-    })
-  })
-  .openapi({ ref: 'TodaysActivityResponse' })
-
-export const totalTimeSchema = z
+// GET /widgets
+export const widgetsSchema = z
   .object({})
-  .openapi({ ref: 'TotalTimeOptions' })
-
-export const totalTimeResponseSchema = z
+  .openapi({ ref: 'WidgetsOptions' })
+export const widgetsResponseSchema = z
   .object({
-    data: z.object({
-      totalTime: z.number().describe('Total time in minutes'),
-      totalTimeInDays: z.number().describe('Total time in days'),
-      totalTimeInMonths: z.number().describe('Total time in months'),
-      totalTimeInYears: z.number().describe('Total time in years')
-    })
+    data: z.array(
+      z.object({
+        uuid: z.string(),
+        name: z.string(),
+        query: z.string(),
+      })
+    )
   })
-  .openapi({ ref: 'TotalTimeResponse' })
+  .openapi({ ref: 'WidgetsResponse' });
 
-export const mostActiveWeekdaySchema = z
+// GET /user-widgets
+export const userWidgetsSchema = z
   .object({
-    weeks: z.number().optional().describe('Number of weeks to consider for the calculation')
+    userUuid: z.string().describe('UUID of the user for which to retrieve the widgets')
   })
-  .openapi({ ref: 'MostActiveWeekdayOptions' })
-
-export const mostActiveWeekdayResponseSchema = z
+  .openapi({ ref: 'UserWidgetsOptions' })
+export const userWidgetsResponseSchema = z
   .object({
-    data: z.object({
-      weekDay: z.string(),
-      averageHoursWorked: z.number()
-    })
+    data: z.array(
+      z.object({
+        uuid: z.string(),
+        widgetUuid: z.string(),
+        widgetName: z.string(),
+        widgetQuery: z.string(),
+        created: z.string(),
+        props: z.object({}),
+        widgetData: z.object({})
+      })
+    )
   })
-  .openapi({ ref: 'MostActiveWeekdayResponse' })
+  .openapi({ ref: 'UserWidgetsResponse' })
 
-  export const topItemsSchema = z
-	.object({
-		item: z.enum(['machines', 'projects', 'languages', 'operativeSystems', 'entities'])
-			.describe('Item type for which to retrieve top entries'),
-		limit: z.number().optional().default(5)
-			.describe('Number of top items to return')
-	})
-	.openapi({ ref: 'TopItemsOptions' })
+// POST /user-widget
+export const postUserWidgetSchema = z
+  .object({
+    userUuid: z.string().describe('UUID of the user'),
+    widgetUuid: z.string().describe('UUID of the widget to insert'),
+    props: z.object({}).describe('Widget props (e.g. skin, timeRange)')
+  })
+  .openapi({ ref: 'PostUserWidgetOptions' })
 
-export const topItemsResponseSchema = z
-	.object({
-		data: z.array(
-			z.object({
-				item: z.string(),
-				time: z.number()
-			})
-		)
-	})
-	.openapi({ ref: 'TopItemsResponse' })
+export const postUserWidgetResponseSchema = z
+  .object({
+    data: z.array(
+      z.object({
+        uuid: z.string(),
+        widgetUuid: z.string(),
+        widgetName: z.string(),
+        widgetQuery: z.string(),
+        created: z.string(),
+        props: z.object({}),
+        widgetData: z.object({})
+      })
+    )
+  })
+
+// PUT /user-widget
+export const putUserWidgetSchema = z
+  .object({
+    userUuid: z.string().describe('UUID of the user'),
+    widgetUuid: z.string().describe('UUID of the widget to update'),
+    props: z.object({}).describe('Widget props (e.g. skin, timeRange)')
+  })
+  .openapi({ ref: 'PutUserWidgetOptions' })
+
+export const putUserWidgetResponseSchema = z
+  .object({
+    data: z.array(
+      z.object({
+        uuid: z.string(),
+        widgetUuid: z.string(),
+        widgetName: z.string(),
+        widgetQuery: z.string(),
+        created: z.string(),
+        props: z.object({}),
+        widgetData: z.object({})
+      })
+    )
+  })
+
+  // DELETE /user-widget
+export const deleteUserWidgetSchema = z
+  .object({
+    userUuid: z.string().describe('UUID of the user'),
+    widgetUuid: z.string().describe('UUID of the widget to delete')
+  })
+  .openapi({ ref: 'DeleteUserWidgetOptions' })
