@@ -113,7 +113,6 @@ auth.get(
 			}
 
 			let dbUser = await getUserByGoogleId(googleUser.id)
-			let apiKey = null
 
 			try {
 				if (!dbUser) {
@@ -133,8 +132,8 @@ auth.get(
 					})
 				}
 
-				// Get the user's API key
-				apiKey = await getApiKey(dbUser.id)
+				// Get the user's API key (stored in the database, not used here)
+				await getApiKey(dbUser.id)
 
 				// Log successful authentication
 				authEventService.logEvent({
@@ -192,30 +191,10 @@ auth.get(
 				sameSite: COOKIE_CONFIG.sameSite
 			})
 
-			// Set cookie with basic user information (accessible from JavaScript)
-			setCookie(
-				c,
-				'user_info',
-				JSON.stringify({
-					id: dbUser.id,
-					email: dbUser.email,
-					fullName: dbUser.fullName,
-					avatarUrl: dbUser.avatarUrl,
-					apiKey: apiKey // Include API key in user info
-				}),
-				{
-					maxAge: COOKIE_CONFIG.accessTokenMaxAge,
-					httpOnly: false, // This cookie is accessible from JavaScript
-					secure: COOKIE_CONFIG.secure,
-					path: COOKIE_CONFIG.path,
-					sameSite: COOKIE_CONFIG.sameSite
-				}
-			)
-
 			logger.info(`Authentication successful for user: ${dbUser.id}, redirecting to frontend`)
 			// Redirect to frontend after successful authentication
 			console.log("Redirecting to FRONTEND: ", CONFIG.FRONTEND_URL)
-			return c.redirect(`${CONFIG.FRONTEND_URL}/callback?success=true`)
+			return c.redirect(`${CONFIG.FRONTEND_URL}/auth/callback?success=true`)
 		} catch (error) {
 			logger.error('Authentication error:', error)
 
@@ -300,25 +279,7 @@ auth.post(
 				sameSite: COOKIE_CONFIG.sameSite
 			})
 
-			// Update user info cookie
-			setCookie(
-				c,
-				'user_info',
-				JSON.stringify({
-					id: userData.id,
-					email: userData.email,
-					fullName: userData.fullName,
-					avatarUrl: userData.avatarUrl,
-					apiKey: apiKey // Include API key in user info
-				}),
-				{
-					maxAge: COOKIE_CONFIG.accessTokenMaxAge,
-					httpOnly: false,
-					secure: COOKIE_CONFIG.secure,
-					path: COOKIE_CONFIG.path,
-					sameSite: COOKIE_CONFIG.sameSite
-				}
-			)
+			// User info is no longer stored in cookies
 
 			// Log successful token refresh
 			authEventService.logEvent({
@@ -370,240 +331,176 @@ auth.post(
 
 // Logout route
 auth.post(
-	'/logout',
-	describeRoute({
-		description: 'Logout user by clearing auth cookies',
-		tags: ['Authentication'],
-		responses: {
-			200: {
-				description: 'Logout successful'
-			}
-		}
-	}),
-	async (c: Context) => {
-		// Try to get user ID for logging
-		const accessToken = getCookie(c, 'access_token')
-		let userId = 0
-		let email = 'unknown'
+  '/logout',
+  describeRoute({
+    description: 'Logout user by clearing auth cookies',
+    tags: ['Authentication'],
+    responses: {
+      200: {
+        description: 'Logout successful'
+      }
+    }
+  }),
+  async (c: Context) => {
+    // Try to get user ID for logging
+    const accessToken = getCookie(c, 'access_token')
+    let userId = 0
+    let email = 'unknown'
 
-		try {
-			if (accessToken) {
-				const userInfo = getCookie(c, 'user_info')
-				if (userInfo) {
-					const parsedInfo = JSON.parse(userInfo)
-					userId = parsedInfo.id
-					email = parsedInfo.email
-				}
-			}
-		} catch (_error) {
-			// Ignore errors in getting user ID
-		}
+    try {
+      if (accessToken) {
+        const payload = await verify(accessToken, CONFIG.JWT_ACCESS_SECRET, 'HS256')
+        userId = payload.userId as number
+        
+        // Get email from database
+        const userData = await getUserById(userId)
+        if (userData) {
+          email = userData.email
+        }
+      }
+    } catch (_error) {
+      // Ignore errors in getting user ID
+      logger.warn('Error getting user info from token:', _error)
+    }
 
-		logger.info(`Logout requested for user: ${userId}`)
+    logger.info(`Logout requested for user: ${userId}`)
 
-		// Log logout event if we have a user ID
-		if (userId > 0) {
-			authEventService.logEvent({
-				timestamp: new Date(),
-				user_id: userId,
-				email,
-				success: true,
-				ip_address: getClientIp(c),
-				user_agent: c.req.header('user-agent') || '',
-				country_code: 'UN',
-				city: 'Unknown',
-				provider: 'local'
-			})
-		}
+    // Log logout event if we have a user ID
+    if (userId > 0) {
+      authEventService.logEvent({
+        timestamp: new Date(),
+        user_id: userId,
+        email: email,
+        success: true,
+        ip_address: getClientIp(c),
+        user_agent: c.req.header('user-agent') || '',
+        country_code: 'UN',
+        city: 'Unknown',
+        provider: 'local'
+      })
+    }
 
-		// Remove cookies by setting maxAge to 0
-		setCookie(c, 'access_token', '', {
-			maxAge: 0,
-			httpOnly: COOKIE_CONFIG.httpOnly,
-			secure: COOKIE_CONFIG.secure,
-			path: COOKIE_CONFIG.path,
-			sameSite: COOKIE_CONFIG.sameSite
-		})
+    // Remove cookies by setting maxAge to 0
+    setCookie(c, 'access_token', '', {
+      maxAge: 0,
+      httpOnly: COOKIE_CONFIG.httpOnly,
+      secure: COOKIE_CONFIG.secure,
+      path: COOKIE_CONFIG.path,
+      sameSite: COOKIE_CONFIG.sameSite
+    })
 
-		setCookie(c, 'refresh_token', '', {
-			maxAge: 0,
-			httpOnly: COOKIE_CONFIG.httpOnly,
-			secure: COOKIE_CONFIG.secure,
-			path: COOKIE_CONFIG.path,
-			sameSite: COOKIE_CONFIG.sameSite
-		})
+    setCookie(c, 'refresh_token', '', {
+      maxAge: 0,
+      httpOnly: COOKIE_CONFIG.httpOnly,
+      secure: COOKIE_CONFIG.secure,
+      path: COOKIE_CONFIG.path,
+      sameSite: COOKIE_CONFIG.sameSite
+    })
 
-		setCookie(c, 'user_info', '', {
-			maxAge: 0,
-			httpOnly: false,
-			secure: COOKIE_CONFIG.secure,
-			path: COOKIE_CONFIG.path,
-			sameSite: COOKIE_CONFIG.sameSite
-		})
-
-		logger.info(`Logout successful for user: ${userId}`)
-		return c.json({
-			success: true,
-			message: 'Logged out successfully'
-		})
+    logger.info(`Logout successful for user: ${userId}`)
+    return c.json({
+      success: true,
+      message: 'Logged out successfully'
+    })
 	}
 )
 
 // User info route
 auth.get(
-	'/me',
-	describeRoute({
-		description: 'Get current user information',
-		tags: ['Authentication'],
-		responses: {
-			200: {
-				description: 'User information retrieved successfully'
-			},
-			401: {
-				description: 'Not authenticated'
-			}
-		}
-	}),
-	async (c: Context) => {
-		// Check if user is authenticated by verifying access_token cookie
-		const accessToken = getCookie(c, 'access_token')
+  '/me',
+  describeRoute({
+    description: 'Get current user information',
+    tags: ['Authentication'],
+    responses: {
+      200: {
+        description: 'User information retrieved successfully'
+      },
+      401: {
+        description: 'Not authenticated'
+      }
+    }
+  }),
+  async (c: Context) => {
+    // Check if user is authenticated by verifying access_token cookie
+    const accessToken = getCookie(c, 'access_token')
 
-		if (!accessToken) {
-			logger.warn('User info request failed: No access token provided')
-			return c.json(
-				{
-					success: false,
-					error: 'Not authenticated'
-				},
-				401
-			)
-		}
+    if (!accessToken) {
+      logger.warn('User info request failed: No access token provided')
+      return c.json(
+        {
+          success: false,
+          error: 'Not authenticated'
+        },
+        401
+      )
+    }
 
-		try {
-			// Get user info from user_info cookie
-			const userInfoCookie = getCookie(c, 'user_info')
+    try {
+      // Extract userId from access_token
+      const payload = await verify(accessToken, CONFIG.JWT_ACCESS_SECRET, 'HS256')
+      const userId = payload.userId as number
 
-			if (userInfoCookie) {
-				const userInfo = JSON.parse(userInfoCookie)
-				logger.info(`User info requested for user: ${userInfo.id}`)
+      logger.debug(`Fetching user info for userId: ${userId} from database`)
 
-				// If API key is not in the cookie, fetch it
-				if (!userInfo.apiKey) {
-					try {
-						const userId = userInfo.id
-						logger.debug(`Fetching API key for user: ${userId} (not found in cookie)`)
-						const apiKey = await getApiKey(userId)
+      // Get user data from database
+      const userData = await getUserById(userId)
 
-						// Create updated user info without mutating original
-						const updatedUserInfo = {
-							...userInfo,
-							apiKey
-						}
+      if (!userData) {
+        logger.warn(`User with ID ${userId} not found in database`)
+        return c.json(
+          {
+            success: false,
+            error: 'User not found'
+          },
+          404
+        )
+      }
 
-						// Update the cookie with the API key
-						setCookie(c, 'user_info', JSON.stringify(updatedUserInfo), {
-							maxAge: COOKIE_CONFIG.accessTokenMaxAge,
-							httpOnly: false,
-							secure: COOKIE_CONFIG.secure,
-							path: COOKIE_CONFIG.path,
-							sameSite: COOKIE_CONFIG.sameSite
-						})
+      // Get API key
+      const apiKey = await getApiKey(userId)
 
-						// Return the updated user info
-						return c.json({
-							success: true,
-							data: {
-								user: updatedUserInfo
-							}
-						})
-					} catch (apiKeyError) {
-						logger.error('Error fetching API key:', apiKeyError)
-					}
-				}
+      // Create user info object
+      const userInfo = {
+        id: userData.id,
+        email: userData.email,
+        fullName: userData.fullName,
+        avatarUrl: userData.avatarUrl,
+        apiKey
+      }
 
-				return c.json({
-					success: true,
-					data: {
-						user: userInfo
-					}
-				})
-			}
+      logger.info(`User info successfully retrieved for user: ${userId}`)
 
-			// If no user_info cookie but access_token is valid, recover user info from database
-			logger.info('User info cookie not found, recovering from token')
+      // Return the user info
+      return c.json({
+        success: true,
+        data: {
+          user: userInfo
+        }
+      })
+    } catch (error) {
+      logger.error('Error in /me endpoint:', error)
+      
+      // Check if it's a token verification error
+      if (error instanceof Error && error.name === 'JwtTokenError') {
+        return c.json(
+          {
+            success: false,
+            error: 'Invalid access token'
+          },
+          401
+        )
+      }
 
-			try {
-				// Extract userId from access_token
-				const payload = await verify(accessToken, CONFIG.JWT_ACCESS_SECRET, 'HS256')
-				const userId = payload.userId as number
-
-				logger.debug(`Recovering user info for userId: ${userId} from database`)
-
-				// Get user data from database
-				const userData = await getUserById(userId)
-
-				if (!userData) {
-					logger.warn(`User with ID ${userId} not found in database`)
-					return c.json(
-						{
-							success: false,
-							error: 'User not found'
-						},
-						404
-					)
-				}
-
-				// Get API key
-				const apiKey = await getApiKey(userId)
-
-				// Create user info object
-				const userInfo = {
-					id: userData.id,
-					email: userData.email,
-					fullName: userData.fullName,
-					avatarUrl: userData.avatarUrl,
-					apiKey
-				}
-
-				// Set user_info cookie
-				setCookie(c, 'user_info', JSON.stringify(userInfo), {
-					maxAge: COOKIE_CONFIG.accessTokenMaxAge,
-					httpOnly: false,
-					secure: COOKIE_CONFIG.secure,
-					path: COOKIE_CONFIG.path,
-					sameSite: COOKIE_CONFIG.sameSite
-				})
-
-				logger.info(`User info successfully recovered for user: ${userId}`)
-
-				// Return the recovered user info
-				return c.json({
-					success: true,
-					data: {
-						user: userInfo
-					}
-				})
-			} catch (tokenError) {
-				logger.error('Error recovering user info from token:', tokenError)
-				return c.json(
-					{
-						success: false,
-						error: 'Invalid access token'
-					},
-					401
-				)
-			}
-		} catch (error) {
-			logger.error('Error getting user info:', error)
-			return c.json(
-				{
-					success: false,
-					error: 'Failed to get user information'
-				},
-				500
-			)
-		}
-	}
+      // For other errors
+      return c.json(
+        {
+          success: false,
+          error: 'Failed to get user information'
+        },
+        500
+      )
+    }
+  }
 )
 
 export { auth }
