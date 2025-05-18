@@ -269,7 +269,7 @@ auth.post(
 				)
 			}
 
-			const userId = await verifyRefreshToken(refreshToken)
+			const { userId } = await verifyRefreshToken(refreshToken)
 			logger.info(`Token refresh requested for user: ${userId}`)
 
 			const userData = await getUserById(userId)

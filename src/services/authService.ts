@@ -1,196 +1,165 @@
-import { sign, verify } from 'hono/jwt'
-import { CONFIG } from '../config'
 import { logger } from '../utils/logger'
 import { sessionService } from './sessionService'
 import { authEventService } from './authEventService'
 import { parseUserAgent } from '../utils/deviceDetection'
 import type { CreateSessionInput } from '../types/sessions'
+import type { ClientInfo } from '../types/auth'
+import { 
+  generateAccessToken, 
+  generateRefreshToken, 
+  verifyAccessToken as verifyToken, 
+  verifyRefreshTokenPayload 
+} from '../utils/tokenUtils'
 
 /**
  * Client information interface for session tracking
  */
-interface ClientInfo {
-	ipAddress: string
-	userAgent: string
-}
+// interface ClientInfo {
+//   ipAddress: string
+//   userAgent: string
+// }
 
 /**
  * Generates JWT tokens for authentication
- * @param {object} dbUser - The user object
- * @param {ClientInfo|null} clientInfo - Optional client information for session tracking
- * @returns {Promise<{accessToken: string, refreshToken: string}>} The generated tokens
+ * @param dbUser - The user data
+ * @param clientInfo - Client information for session tracking
+ * @returns Object containing access and refresh tokens
  */
 export async function generateTokens(
-	dbUser: {
-		id: number
-		email: string
-		fullName: string
-		avatarUrl: string
-	},
-	clientInfo: ClientInfo | null = null
+  dbUser: {
+    id: number
+    email: string
+    fullName: string
+    avatarUrl: string
+  },
+  clientInfo: ClientInfo
 ): Promise<{
-	accessToken: string
-	refreshToken: string
+  accessToken: string
+  refreshToken: string
+  tokenId: string
 }> {
-	logger.debug(`Generating tokens for user: ${dbUser.id}`)
+  const accessToken = await generateAccessToken(dbUser.id)
+  const { token: refreshToken, tokenId } = await generateRefreshToken()
 
-	// Generate access token
-	const accessToken = await sign(
-		{
-			userId: dbUser.id,
-			email: dbUser.email,
-			fullName: dbUser.fullName,
-			avatarUrl: dbUser.avatarUrl
-		},
-		CONFIG.JWT_ACCESS_SECRET,
-		'HS256'
-	)
+  // Parse user agent for session details
+  const userAgent = parseUserAgent(clientInfo.userAgent)
 
-	// Generate refresh token
-	const refreshToken = await sign({ userId: dbUser.id }, CONFIG.JWT_REFRESH_SECRET, 'HS256')
+  // Create session in database
+  const sessionData: CreateSessionInput = {
+    user_id: dbUser.id,
+    refresh_token: tokenId,
+    ip_address: clientInfo.ipAddress,
+    device_name: userAgent.deviceName,
+    device_type: userAgent.deviceType,
+    browser: userAgent.browser,
+    os: userAgent.os,
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+  }
 
-	// If client info is provided, create a session
-	if (clientInfo) {
-		try {
-			// Parse user agent for device information
-			const deviceInfo = parseUserAgent(clientInfo.userAgent)
+  await sessionService.createSession(sessionData)
 
-			// Calculate expiration date based on refresh token expiration
-			// Parse the expiration time from the config
-			const expiresInValue = CONFIG.REFRESH_TOKEN_EXPIRES_IN
-			const expiresAt = new Date()
+  // Log successful authentication
+  authEventService.logEvent({
+    timestamp: new Date(),
+    user_id: dbUser.id,
+    email: dbUser.email,
+    success: true,
+    ip_address: clientInfo.ipAddress,
+    user_agent: clientInfo.userAgent,
+    country_code: 'UN',
+    city: 'Unknown',
+    provider: 'google',
+    event_type: 'created',
+    device_info: {
+      device_name: userAgent.deviceName,
+      device_type: userAgent.deviceType,
+      browser: userAgent.browser,
+      os: userAgent.os
+    }
+  })
 
-			// Handle different formats like "30d", "24h", "60m"
-			if (typeof expiresInValue === 'string') {
-				const match = expiresInValue.match(/^(\d+)([dhms])$/)
-				if (match) {
-					const value = Number.parseInt(match[1], 10)
-					const unit = match[2]
-
-					switch (unit) {
-						case 'd':
-							expiresAt.setDate(expiresAt.getDate() + value)
-							break
-						case 'h':
-							expiresAt.setHours(expiresAt.getHours() + value)
-							break
-						case 'm':
-							expiresAt.setMinutes(expiresAt.getMinutes() + value)
-							break
-						case 's':
-							expiresAt.setSeconds(expiresAt.getSeconds() + value)
-							break
-					}
-				} else {
-					// Default to 30 days if format is not recognized
-					expiresAt.setDate(expiresAt.getDate() + 30)
-				}
-			} else {
-				// Default to 30 days if not a string
-				expiresAt.setDate(expiresAt.getDate() + 30)
-			}
-
-			// Create session data
-			const sessionData: CreateSessionInput = {
-				user_id: dbUser.id,
-				refresh_token: refreshToken,
-				device_name: deviceInfo.deviceName,
-				device_type: deviceInfo.deviceType,
-				browser: deviceInfo.browser,
-				os: deviceInfo.os,
-				ip_address: clientInfo.ipAddress,
-				expires_at: expiresAt
-			}
-
-			// Create session
-			const sessionId = await sessionService.createSession(sessionData)
-
-			// Log session creation event using the auth event service
-			authEventService.logEvent({
-				timestamp: new Date(),
-				user_id: dbUser.id,
-				email: dbUser.email,
-				success: true,
-				ip_address: clientInfo.ipAddress,
-				user_agent: clientInfo.userAgent,
-				country_code: 'UN', // Default value
-				city: 'Unknown', // Default value
-				provider: 'local',
-				session_id: sessionId, // Add session_id to auth events
-				device_info: {
-					device_name: deviceInfo.deviceName,
-					device_type: deviceInfo.deviceType,
-					browser: deviceInfo.browser,
-					os: deviceInfo.os
-				}
-			})
-		} catch (error) {
-			logger.error(`Failed to create session for user ${dbUser.id}:`, error)
-			// Continue even if session creation fails
-		}
-	}
-
-	logger.debug(`Tokens generated successfully for user: ${dbUser.id}`)
-	return { accessToken, refreshToken }
+  return { accessToken, refreshToken, tokenId }
 }
 
 /**
- * Verifies a JWT access token
- * @param {string} token - The JWT token to verify
- * @returns {Promise<number>} The user ID from the token
+ * Verifies an access token and returns the user ID
+ * @param token - The JWT access token to verify
+ * @returns The user ID from the token
  */
 export async function verifyAccessToken(token: string): Promise<number> {
-	try {
-		logger.debug('Verifying access token')
-		const payload = await verify(token, CONFIG.JWT_ACCESS_SECRET, 'HS256')
-		logger.debug(`Access token verified for user: ${payload.userId}`)
-		return payload.userId as number
-	} catch (error) {
-		logger.error('Access token verification failed:', error)
-		throw new Error('Invalid access token')
-	}
+  return verifyToken(token)
 }
 
 /**
- * Verifies a JWT refresh token
- * @param {string} token - The JWT refresh token to verify
- * @returns {Promise<number>} The user ID from the token
+ * Verifies a refresh token and returns the user ID and token ID
+ * @param token - The JWT refresh token to verify
+ * @returns Object containing user ID and token ID
  */
-export async function verifyRefreshToken(token: string): Promise<number> {
-	try {
-		logger.debug('Verifying refresh token')
-		const payload = await verify(token, CONFIG.JWT_REFRESH_SECRET, 'HS256')
-		const userId = payload.userId as number
-
-		// Check if the token is associated with an active session
-		const session = await sessionService.getSessionByRefreshToken(token)
-		if (!session) {
-			logger.error('No active session found for refresh token')
-			throw new Error('Invalid or expired session')
-		}
-
-		// Update session activity
-		await sessionService.updateSessionActivity(session.id)
-
-		// Log session refresh event using the auth event service
-		authEventService.logEvent({
-			timestamp: new Date(),
-			user_id: userId,
-			email: '', // We don't have this information here
-			success: true,
-			ip_address: session.ip_address,
-			user_agent: '', // We don't have this information here
-			country_code: 'UN',
-			city: 'Unknown',
-			provider: 'local',
-			session_id: session.id,
-			event_type: 'refreshed' // Add event_type to auth events
-		})
-
-		logger.debug(`Refresh token verified for user: ${userId}`)
-		return userId
-	} catch (error) {
-		logger.error('Refresh token verification failed:', error)
-		throw new Error('Invalid refresh token')
-	}
+export async function verifyRefreshToken(token: string): Promise<{ userId: number; tokenId: string }> {
+  try {
+    const { tokenId } = await verifyRefreshTokenPayload(token)
+    
+    // Get session from database using token
+    const session = await sessionService.getSessionByRefreshToken(tokenId)
+    
+    // Check if session exists and is not revoked
+    if (!session) {
+      throw new Error('Session not found')
+    }
+    
+    // Check if token has expired
+    if (session.expires_at && new Date() > new Date(session.expires_at)) {
+      throw new Error('Refresh token has expired')
+    }
+    
+    return { userId: session.user_id, tokenId }
+  } catch (error) {
+    logger.error('Refresh token verification failed:', error)
+    throw new Error('Invalid or expired refresh token')
+  }
 }
+
+/**
+ * Revokes a refresh token
+ * @param tokenId - The ID of the token to revoke
+ * @returns Promise that resolves when the token is revoked
+ */
+export async function revokeRefreshToken(tokenId: string): Promise<void> {
+  try {
+    // Get the session first to ensure it exists
+    const session = await sessionService.getSessionByRefreshToken(tokenId)
+    if (session?.id) {
+      // Pass the session ID as a string and the user ID as a number
+      await sessionService.revokeSession(session.id, session.user_id)
+    }
+  } catch (error) {
+    logger.error('Failed to revoke refresh token:', error)
+    throw new Error('Failed to revoke refresh token')
+  }
+}
+
+/**
+ * Revokes all refresh tokens for a user
+ * @param userId - The ID of the user
+ * @returns Promise that resolves when all tokens are revoked
+ */
+export async function revokeAllUserSessions(userId: number): Promise<void> {
+  try {
+    // Get all user sessions
+    const sessions = await sessionService.getUserSessions(userId)
+    
+    // Revoke each session
+    for (const session of sessions) {
+      try {
+        await sessionService.revokeSession(session.id, userId)
+      } catch (error) {
+        logger.error(`Failed to revoke session ${session.id}:`, error)
+        // Continue with other sessions even if one fails
+      }
+    }
+  } catch (error) {
+    logger.error('Failed to revoke user sessions:', error)
+    throw new Error('Failed to revoke user sessions')
+  }
+}
+

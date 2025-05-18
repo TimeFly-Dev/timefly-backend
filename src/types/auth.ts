@@ -13,6 +13,11 @@ export interface DbUser {
 	avatarUrl: string
 }
 
+export interface ClientInfo {
+  ipAddress: string
+  userAgent: string
+}
+
 export interface UserContext {
 	id: number
 	email: string
