@@ -2,9 +2,59 @@
 import { mysqlPool } from '@/db/mysql'
 import { executeWidgetQueries } from './dashboardService'
 import { v4 as uuidv4 } from 'uuid'
+import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
+
+// Common interface for widget data
+interface WidgetData extends RowDataPacket {
+  uuid: string
+  widget_uuid: string
+  widget_name: string
+  widget_query: string
+  props: string | Record<string, unknown>
+  created: string
+}
+
+// Helper function to fetch widget data by UUID
+const fetchWidgetByUuid = async (userWidgetUuid: string): Promise<WidgetData> => {
+  const [widgets] = await mysqlPool.execute<WidgetData[]>(
+    `
+    SELECT 
+      uhw.uuid as uuid,
+      w.uuid as widget_uuid,
+      w.name as widget_name,
+      w.query as widget_query,
+      uhw.props as props,
+      uhw.created_at as created
+    FROM 
+      timefly.users_has_widgets uhw
+    JOIN 
+      timefly.widgets w ON w.id = uhw.widget_id
+    WHERE 
+      uhw.uuid = ?
+    `,
+    [userWidgetUuid]
+  )
+
+  if (!Array.isArray(widgets) || widgets.length === 0) {
+    throw new Error('User widget not found')
+  }
+
+  return widgets[0]
+}
+
+// Helper function to format widget response
+const formatWidgetResponse = (widget: WidgetData) => ({
+  uuid: widget.uuid,
+  widgetUuid: widget.widget_uuid,
+  widgetName: widget.widget_name,
+  widgetQuery: widget.widget_query,
+  created: widget.created,
+  props: typeof widget.props === 'string' ? JSON.parse(widget.props) : widget.props,
+  widgetData: {}
+})
 
 // Widget interface
-export interface Widget {
+export interface Widget extends RowDataPacket {
   uuid: string
   name: string
   query: string
@@ -12,20 +62,15 @@ export interface Widget {
 
 // Get all widgets
 export const getWidgets = async (): Promise<Widget[]> => {
-  const [rows] = await mysqlPool.execute(
+  const [rows] = await mysqlPool.execute<RowDataPacket[]>(
     'SELECT uuid, name, query FROM timefly.widgets'
   )
-
-  return rows.map(row => ({
-    uuid: row.uuid,
-    name: row.name,
-    query: row.query
-  }))
+  return (Array.isArray(rows) ? rows : []) as Widget[]
 }
 
 // Get user widgets with their data
 export const getUserWidgets = async (userUuid: string): Promise<Record<string, unknown>[]> => {
-  const [rows] = await mysqlPool.execute(
+  const [rows] = await mysqlPool.execute<WidgetData[]>(
     `
     SELECT
       uhw.uuid as uuid,
@@ -46,44 +91,86 @@ export const getUserWidgets = async (userUuid: string): Promise<Record<string, u
     [userUuid]
   )
 
-  const queriesToExecute = rows.map(row => ({ uuid: row.uuid, query: row.widget_query }))
+  if (!Array.isArray(rows)) {
+    return []
+  }
+
+  const queriesToExecute = rows.map((row) => ({
+    uuid: row.uuid,
+    query: row.widget_query
+  }))
+  
   const widgetData = await executeWidgetQueries(queriesToExecute)
 
-  // Map final results
-  return rows.map((result) => ({
-    uuid: result.uuid,
-    widgetUuid: result.widget_uuid,
-    widgetName: result.widget_name,
-    widgetQuery: result.widget_query,
-    created: result.created,
-    props: result.props,
-    widgetData: widgetData[result.uuid] || { data: {} }
+  return rows.map(row => ({
+    ...formatWidgetResponse(row),
+    widgetData: widgetData[row.uuid]?.data || {}
   }))
 }
 
 // Insert a user_has_widgets record
 export const postUserWidget = async (body: Record<string, unknown>): Promise<Record<string, unknown>> => {
   const { userUuid, widgetUuid, props } = body
+  const userWidgetUuid = uuidv4()
 
-  const [result] = await mysqlPool.execute<mysql.RowDataPacket[]>(
+  try {
+    // Insert the user-widget relationship
+    await mysqlPool.execute<ResultSetHeader>(
+      `
+      INSERT INTO 
+        timefly.users_has_widgets (uuid, user_id, widget_id, props)
+      VALUES (
+        ?, 
+        (SELECT id FROM timefly.users WHERE uuid = ?),
+        (SELECT id FROM timefly.widgets WHERE uuid = ?),
+        ?
+      )
+      `,
+      [userWidgetUuid, userUuid, widgetUuid, JSON.stringify(props)]
+    )
+
+    // Fetch and return the created widget
+    const widget = await fetchWidgetByUuid(userWidgetUuid)
+    return formatWidgetResponse(widget)
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('a foreign key constraint fails')) {
+      throw new Error('User or widget not found')
+    }
+    throw error
+  }
+}
+
+// Update a user's widget props
+export const updateUserWidget = async (userWidgetUuid: string, props: Record<string, unknown>): Promise<Record<string, unknown>> => {
+  // Update the user-widget relationship
+  const [result] = await mysqlPool.execute<ResultSetHeader>(
     `
-  INSERT INTO 
-    timefly.users_has_widgets (uuid, user_id, widget_id, props)
-  VALUES (
-    ?, 
-    (SELECT id FROM timefly.users WHERE uuid = ?),
-    (SELECT id FROM timefly.widgets WHERE uuid = ?),
-    ?
-  )
-  `,
-    [
-      uuidv4(),
-      userUuid,
-      widgetUuid,
-      JSON.stringify(props) // asegura que se inserta como JSON válido
-    ]
+    UPDATE timefly.users_has_widgets
+    SET props = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE uuid = ?
+    `,
+    [JSON.stringify(props), userWidgetUuid]
   )
 
+  if (result.affectedRows === 0) {
+    throw new Error('User widget not found')
+  }
 
-  return result as unknown as Record<string, unknown>
+  // Fetch and return the updated widget
+  const widget = await fetchWidgetByUuid(userWidgetUuid)
+  return formatWidgetResponse(widget)
+}
+
+// Delete a user's widget
+export const deleteUserWidget = async (userWidgetUuid: string): Promise<boolean> => {
+  const [result] = await mysqlPool.execute<ResultSetHeader>(
+    `
+    DELETE FROM timefly.users_has_widgets
+    WHERE uuid = ?
+    `,
+    [userWidgetUuid]
+  )
+
+  return result.affectedRows > 0
 }

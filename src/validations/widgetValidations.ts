@@ -67,11 +67,12 @@ export const postUserWidgetResponseSchema = z
 // PUT /user-widget
 export const putUserWidgetSchema = z
   .object({
-    userUuid: z.string().describe('UUID of the user'),
-    widgetUuid: z.string().describe('UUID of the widget to update'),
-    props: z.object({}).describe('Widget props (e.g. skin, timeRange)')
+    props: z.record(z.any()).describe('Widget props (e.g. skin, timeRange)')
   })
-  .openapi({ ref: 'PutUserWidgetOptions' })
+  .openapi({ 
+    ref: 'PutUserWidgetOptions',
+    description: 'Update widget props. The userWidgetUuid is provided in the URL path.'
+  })
 
 export const putUserWidgetResponseSchema = z
   .object({
@@ -88,10 +89,10 @@ export const putUserWidgetResponseSchema = z
     )
   })
 
-  // DELETE /user-widget
+  // DELETE /user-widget/:userWidgetUuid
 export const deleteUserWidgetSchema = z
-  .object({
-    userUuid: z.string().describe('UUID of the user'),
-    widgetUuid: z.string().describe('UUID of the widget to delete')
+  .object({})
+  .openapi({ 
+    ref: 'DeleteUserWidgetOptions',
+    description: 'Delete a user widget. The userWidgetUuid is provided in the URL path.'
   })
-  .openapi({ ref: 'DeleteUserWidgetOptions' })
