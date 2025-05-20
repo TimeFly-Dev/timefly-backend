@@ -97,7 +97,8 @@ export const getUserWidgets = async (userUuid: string): Promise<Record<string, u
 
   const queriesToExecute = rows.map((row) => ({
     uuid: row.uuid,
-    query: row.widget_query
+    query: row.widget_query,
+    userUuid: userUuid
   }))
   
   const widgetData = await executeWidgetQueries(queriesToExecute)

@@ -15,6 +15,7 @@ import {
 	deleteUserWidgetSchema,
 } from '../validations/widgetValidations'
 import { getWidgets, getUserWidgets, postUserWidget, updateUserWidget, deleteUserWidget } from '@/services/widgetsService'
+import { getTodaysActivity } from '@/services/dashboardService'
 
 const dashboard = new Hono()
 
@@ -407,6 +408,77 @@ dashboard.delete(
       )
     }
   }
+)
+
+
+dashboard.get(
+	'/todays-activity',
+	describeRoute({
+		description: "Get today's coding activity timeline",
+		tags: ['Dashboard'],
+		responses: {
+			200: {
+				description: "Successful response with today's activity timeline",
+				content: {
+					'application/json': {
+						schema: {
+							type: 'object',
+							properties: {
+								data: {
+									type: 'object',
+									properties: {
+										timeline: {
+											type: 'array',
+											items: {
+												type: 'object',
+												properties: {
+													start: { type: 'string', format: 'date-time' },
+													end: { type: 'string', format: 'date-time' },
+													project: { type: 'string' },
+													time: { type: 'number' }
+												},
+												required: ['start', 'end', 'project', 'time']
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			500: {
+				description: 'Internal Server Error',
+				content: {
+					'application/json': {
+						schema: {
+							type: 'object',
+							properties: {
+								success: { type: 'boolean' },
+								error: { type: 'string' },
+								details: { type: 'string' }
+							}
+						}
+					}
+				}
+			}
+		}
+	}),
+	async (c) => {
+		try {
+			// TODO: Get the actual user ID from the auth token
+			const userId = 1; // Replace with actual user ID from auth
+			const activity = await getTodaysActivity(userId);
+			return c.json(activity);
+		} catch (error: unknown) {
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+			console.error('Error fetching today\'s activity:', error);
+			return c.json(
+				{ success: false, error: 'Failed to fetch activity', details: errorMessage },
+				500
+			);
+		}
+	}
 )
 
 export { dashboard }
