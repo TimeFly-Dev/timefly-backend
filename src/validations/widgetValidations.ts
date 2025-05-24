@@ -96,3 +96,23 @@ export const deleteUserWidgetSchema = z
     ref: 'DeleteUserWidgetOptions',
     description: 'Delete a user widget. The userWidgetUuid is provided in the URL path.'
   })
+
+// PUT /user-widgets-position
+export const putUserWidgetsPositionSchema = z
+  .object({
+    widgets: z.array(
+      z.object({
+        usersHasWidgetsUuid: z.string().uuid().describe('UUID de users_has_widgets'),
+        position: z.number().int().min(0).describe('Nueva posición del widget')
+      })
+    )
+  })
+  .openapi({ ref: 'PutUserWidgetsPositionOptions' })
+
+export const putUserWidgetsPositionResponseSchema = z
+  .object({
+    success: z.boolean(),
+    error: z.string().optional(),
+    details: z.string().optional()
+  })
+  .openapi({ ref: 'PutUserWidgetsPositionResponse' })

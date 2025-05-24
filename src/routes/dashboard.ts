@@ -13,8 +13,10 @@ import {
 	putUserWidgetSchema,
 	putUserWidgetResponseSchema,
 	deleteUserWidgetSchema,
+	putUserWidgetsPositionSchema,
+	putUserWidgetsPositionResponseSchema
 } from '../validations/widgetValidations'
-import { getWidgets, getUserWidgets, postUserWidget, updateUserWidget, deleteUserWidget } from '@/services/widgetsService'
+import { getWidgets, getUserWidgets, postUserWidget, updateUserWidget, deleteUserWidget, updateUserWidgetsPosition } from '@/services/widgetsService'
 import { getTodaysActivity } from '@/services/dashboardService'
 
 const dashboard = new Hono()
@@ -418,7 +420,7 @@ dashboard.get(
 		tags: ['Dashboard'],
 		responses: {
 			200: {
-				description: "Successful response with today's activity timeline",
+				description: 'Successful response with today\'s activity timeline',
 				content: {
 					'application/json': {
 						schema: {
@@ -479,6 +481,28 @@ dashboard.get(
 			);
 		}
 	}
+)
+
+dashboard.put(
+  '/user-widgets-position',
+  zValidator(
+    'json',
+    putUserWidgetsPositionSchema
+  ),
+  async (c) => {
+    try {
+      const { widgets } = c.req.valid('json')
+      await updateUserWidgetsPosition(widgets)
+      return c.json({ success: true })
+    } catch (error) {
+      console.error('Error updating widgets position:', error)
+      return c.json({
+        success: false,
+        error: 'Failed to update widgets position',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }, 500)
+    }
+  }
 )
 
 export { dashboard }

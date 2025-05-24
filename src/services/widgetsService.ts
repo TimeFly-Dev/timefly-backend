@@ -45,6 +45,7 @@ const fetchWidgetByUuid = async (userWidgetUuid: string): Promise<WidgetData> =>
 // Helper function to format widget response
 const formatWidgetResponse = (widget: WidgetData) => ({
   uuid: widget.uuid,
+  position: widget.position,
   widgetUuid: widget.widget_uuid,
   widgetName: widget.widget_name,
   widgetQuery: widget.widget_query,
@@ -74,6 +75,7 @@ export const getUserWidgets = async (userUuid: string): Promise<Record<string, u
     `
     SELECT
       uhw.uuid as uuid,
+      uhw.position as position,
       w.uuid as widget_uuid,
       w.name as widget_name,
       w.query as widget_query,
@@ -87,6 +89,8 @@ export const getUserWidgets = async (userUuid: string): Promise<Record<string, u
       timefly.users u ON u.id = uhw.user_id
     WHERE
       u.uuid = ?
+    ORDER BY
+      uhw.position ASC
     `,
     [userUuid]
   )
@@ -105,7 +109,7 @@ export const getUserWidgets = async (userUuid: string): Promise<Record<string, u
 
   return rows.map(row => ({
     ...formatWidgetResponse(row),
-    widgetData: widgetData[row.uuid]?.data || {}
+    widgetData: widgetData[row.uuid] || {}
   }))
 }
 
@@ -174,4 +178,21 @@ export const deleteUserWidget = async (userWidgetUuid: string): Promise<boolean>
   )
 
   return result.affectedRows > 0
+}
+
+// Update multiple widgets' positions for a user
+export const updateUserWidgetsPosition = async (
+  widgets: Array<{ usersHasWidgetsUuid: string; position: number }>
+): Promise<boolean> => {
+  await Promise.all(
+    widgets.map(({ position, usersHasWidgetsUuid }) =>
+      mysqlPool.execute(
+        `UPDATE timefly.users_has_widgets 
+         SET position = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE uuid = ?`,
+        [position, usersHasWidgetsUuid]
+      )
+    )
+  )
+  return true
 }
