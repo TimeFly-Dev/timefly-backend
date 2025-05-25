@@ -68,7 +68,7 @@ const queries = {
       clickhouseClient.query({ query: timelineQuery, format: 'JSONEachRow' })
     ])
 
-    const aggregatedTotals = (await aggregatedTotalsResult.json())[0] || { coding: 0, debugging: 0, reading: 0 }
+    const aggregatedTotals  = (await aggregatedTotalsResult.json())[0] || { coding: 0, debugging: 0, reading: 0 }
     const pulsesTotals = (await pulsesTotalsResult.json())[0] || { coding: 0, debugging: 0, reading: 0 }
 
     // Combine totals (prioritize aggregated data, supplement with individual pulses)

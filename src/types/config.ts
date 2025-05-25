@@ -57,6 +57,15 @@ export interface EmailConfig {
 }
 
 /**
+ * Types for Stripe configuration
+ */
+export interface StripeConfig {
+	readonly STRIPE_SECRET_KEY: string
+	readonly STRIPE_PUBLISHABLE_KEY: string
+	readonly STRIPE_WEBHOOK_SECRET: string
+}
+
+/**
  * Types for logging configuration
  */
 export interface LoggingConfig {
@@ -67,7 +76,7 @@ export interface LoggingConfig {
 /**
  * Combined application configuration
  */
-export interface AppConfig extends ServerConfig, AuthConfig, OAuthConfig, MySQLConfig, ClickHouseConfig, EmailConfig, LoggingConfig {}
+export interface AppConfig extends ServerConfig, AuthConfig, OAuthConfig, MySQLConfig, ClickHouseConfig, EmailConfig, StripeConfig, LoggingConfig {}
 
 /**
  * Environment variable types

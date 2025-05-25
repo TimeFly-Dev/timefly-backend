@@ -1,7 +1,6 @@
 // widgetsService.ts
 import { mysqlPool } from '@/db/mysql'
 import { executeWidgetQueries } from './dashboardService'
-import { v4 as uuidv4 } from 'uuid'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 
 // Common interface for widget data
@@ -102,7 +101,7 @@ export const getUserWidgets = async (userUuid: string): Promise<Record<string, u
   const queriesToExecute = rows.map((row) => ({
     uuid: row.uuid,
     query: row.widget_query,
-    userUuid: userUuid
+    userId: row.user_id
   }))
   
   const widgetData = await executeWidgetQueries(queriesToExecute)
@@ -116,7 +115,7 @@ export const getUserWidgets = async (userUuid: string): Promise<Record<string, u
 // Insert a user_has_widgets record
 export const postUserWidget = async (body: Record<string, unknown>): Promise<Record<string, unknown>> => {
   const { userUuid, widgetUuid, props } = body
-  const userWidgetUuid = uuidv4()
+  const userWidgetUuid = crypto.randomUUID()
 
   try {
     // Insert the user-widget relationship
