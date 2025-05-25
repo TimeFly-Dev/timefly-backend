@@ -10,16 +10,16 @@ services:
     environment:
       - CLICKHOUSE_UID=101
       - CLICKHOUSE_GID=101
-      - CLICKHOUSE_USER=default
-      - CLICKHOUSE_PASSWORD=clickhouse_password
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
 
   mysql:
     image: mysql:8
     environment:
-      - MYSQL_ROOT_PASSWORD=your_mysql_root_password
-      - MYSQL_DATABASE=timefly
-      - MYSQL_USER=timefly_user
-      - MYSQL_PASSWORD=your_mysql_password
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     ports:
       - "3306:3306"
     volumes:

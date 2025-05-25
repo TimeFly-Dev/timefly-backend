@@ -469,7 +469,7 @@ dashboard.get(
 	async (c) => {
 		try {
 			// TODO: Get the actual user ID from the auth token
-			const userId = 1; // Replace with actual user ID from auth
+			const userId = 2; // Replace with actual user ID from auth
 			const activity = await getTodaysActivity(userId);
 			return c.json(activity);
 		} catch (error: unknown) {
