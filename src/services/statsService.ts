@@ -1,8 +1,8 @@
 import { clickhouseClient } from '../db/clickhouse'
-import type { CodingHours, CodingStatsOptions, ClickHouseResult, TotalCodingHours, TopLanguage, TopLanguageRaw } from '../types/stats'
+import type { codingTime, codingTimeOptions, ClickHouseResult, TotalcodingTimes, TopLanguage, TopLanguageRaw, Pulse, PulsesOptions, DashboardResponse, DashboardTimelineItem } from '../types/stats'
 import { formatDuration, formatDateRange } from '../utils/timeFormatters'
 
-export async function getCodingStats({ userId, startDate, endDate, date, aggregation }: CodingStatsOptions): Promise<CodingHours[]> {
+export async function getcodingTime({ userId, startDate, endDate, date, aggregation }: codingTimeOptions): Promise<codingTime[]> {
 	let dateFunction: string
 	let groupBy: string
 	let selectClause: string
@@ -63,7 +63,7 @@ export async function getCodingStats({ userId, startDate, endDate, date, aggrega
 	const data = (await result.json()) as ClickHouseResult[]
 
 	if (aggregation === 'total') {
-		const totalData = data as TotalCodingHours[]
+		const totalData = data as TotalcodingTimes[]
 		if (totalData.length > 0) {
 			return [
 				{
@@ -75,7 +75,7 @@ export async function getCodingStats({ userId, startDate, endDate, date, aggrega
 		return []
 	}
 
-	return (data as CodingHours[]).map((row) => ({
+	return (data as codingTime[]).map((row) => ({
 		date: row.date,
 		hours: formatDuration(Number(row.hours))
 	}))
@@ -154,22 +154,128 @@ export async function getTopLanguages({
 	}))
 }
 
-// Optional: Add a function to get combined stats from both tables if needed
-export async function getCombinedCodingStats({
+export async function getPulses({
+	userId,
+	startDate,
+	endDate,
+	timeRange,
+	responseFormat = 'default'
+}: PulsesOptions): Promise<Pulse[] | DashboardResponse> {
+	let dateFunction = 'toDate(start_time)'
+	let whereClause = `WHERE user_id = ${userId}`
+
+	// If startDate and endDate are provided, use them directly
+	if (!startDate && !endDate) {
+		// Otherwise, calculate the date range based on timeRange
+		switch (timeRange) {
+			case 'day':
+				dateFunction = 'toDate(start_time)'
+				whereClause += ' AND start_time >= subtractDays(now(), 1)'
+				break
+			case 'week':
+				dateFunction = 'toStartOfWeek(start_time)'
+				whereClause += ' AND start_time >= subtractDays(now(), 7)'
+				break
+			case 'month':
+				dateFunction = 'toStartOfMonth(start_time)'
+				whereClause += ' AND start_time >= subtractMonths(now(), 1)'
+				break
+		}
+	} else {
+		// If custom date range is provided
+		if (startDate) {
+			whereClause += ` AND start_time >= toDateTime('${startDate}')`
+		}
+		if (endDate) {
+			whereClause += ` AND end_time <= toDateTime('${endDate}')`
+		}
+	}
+
+	const query = `
+    SELECT 
+      ${dateFunction} as date,
+      project,
+      language,
+      state,
+      dateDiff('second', start_time, end_time) as duration,
+      start_time,
+      end_time
+    FROM aggregated_pulses
+    ${whereClause}
+    ORDER BY start_time DESC
+  `
+
+	const result = await clickhouseClient.query({
+		query,
+		format: 'JSONEachRow'
+	})
+
+	const data = (await result.json()) as (Pulse & { state: string })[];
+
+	// If responseFormat is dashboard, transform the data
+	if (responseFormat === 'dashboard') {
+		// Create the computed object with state counts
+		const computed: Record<string, number> = {};
+		
+		// Create the timeline array
+		const timeline: DashboardTimelineItem[] = [];
+		
+		// Process each pulse
+		data.forEach((row) => {
+			// Add to computed stats by state
+			const state = row.state.toLowerCase();
+			const durationInMinutes = Math.round(Number(row.duration) / 60);
+			
+			if (!computed[state]) {
+				computed[state] = 0;
+			}
+			computed[state] += durationInMinutes;
+			
+			// Add to timeline
+			timeline.push({
+				start: row.start_time,
+				end: row.end_time,
+				project: row.project,
+				time: durationInMinutes
+			});
+		});
+		
+		// Sort timeline by start time
+		timeline.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+		
+		return {
+			computed,
+			timeline
+		};
+	}
+
+	// Default response format
+	return data.map((row) => ({
+		date: row.date,
+		project: row.project,
+		language: row.language,
+		state: row.state,
+		duration: Number(row.duration),
+		start_time: row.start_time,
+		end_time: row.end_time
+	}))
+}
+
+export async function getCombinedcodingTime({
 	userId,
 	startDate,
 	endDate,
 	date,
 	aggregation
-}: CodingStatsOptions): Promise<CodingHours[]> {
+}: codingTimeOptions): Promise<codingTime[]> {
 	// This function would be useful if you want to include both individual pulses and aggregated pulses
 	// For now, we'll focus on using the aggregated_pulses table for statistics since it's more efficient
 
-	// Implementation would be similar to getCodingStats but with a UNION query
+	// Implementation would be similar to getcodingTime but with a UNION query
 	// between pulses and aggregated_pulses tables
 
 	// For most statistics purposes, using just the aggregated_pulses table is recommended
 	// as it already contains the summarized data
 
-	return getCodingStats({ userId, startDate, endDate, date, aggregation })
+	return getcodingTime({ userId, startDate, endDate, date, aggregation })
 }

@@ -1,9 +1,9 @@
-export interface CodingHours {
+export interface codingTime {
 	date: string
 	hours: string
 }
 
-export interface TotalCodingHours {
+export interface TotalcodingTimes {
 	start_date: string
 	end_date: string
 	total_hours: number
@@ -11,7 +11,7 @@ export interface TotalCodingHours {
 
 export type AggregationType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'total'
 
-export interface CodingStatsOptions {
+export interface codingTimeOptions {
 	userId: number
 	startDate?: string
 	endDate?: string
@@ -19,7 +19,7 @@ export interface CodingStatsOptions {
 	aggregation: AggregationType
 }
 
-export type ClickHouseResult = CodingHours | TotalCodingHours
+export type ClickHouseResult = codingTime | TotalcodingTimes
 
 export interface TopLanguageRaw {
 	language: string
@@ -41,4 +41,34 @@ export interface TopLanguagesOptions {
 	endDate?: string
 	limit?: number
 	period?: 'day' | 'week' | 'month' | 'year' | 'all'
+}
+
+export interface Pulse {
+	date: string
+	project: string
+	language: string
+	state: string
+	duration: number
+	start_time: string
+	end_time: string
+}
+
+export interface PulsesOptions {
+	userId: number
+	startDate?: string
+	endDate?: string
+	timeRange: 'day' | 'week' | 'month'
+	responseFormat?: 'default' | 'dashboard'
+}
+
+export interface DashboardTimelineItem {
+	start: string
+	end: string
+	project: string
+	time: number
+}
+
+export interface DashboardResponse {
+	computed: Record<string, number>
+	timeline: DashboardTimelineItem[]
 }
