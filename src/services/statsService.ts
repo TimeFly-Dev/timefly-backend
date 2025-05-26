@@ -217,10 +217,7 @@ export async function getPulses({
 		// Create the computed object with state counts
 		const computed: Record<string, number> = {};
 		
-		// Create the timeline array
-		const timeline: DashboardTimelineItem[] = [];
-		
-		// Process each pulse
+		// Process each pulse for computed stats
 		data.forEach((row) => {
 			// Add to computed stats by state
 			const state = row.state.toLowerCase();
@@ -230,8 +227,51 @@ export async function getPulses({
 				computed[state] = 0;
 			}
 			computed[state] += durationInMinutes;
+		});
+		
+		// Create timeline with merged pulses when time difference is < 5 minutes
+		const timeline: DashboardTimelineItem[] = [];
+		
+		// Sort data by start time for processing in chronological order
+		const sortedData = [...data].sort((a, b) => 
+			new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+		);
+		
+		// Process pulses and merge them when appropriate
+		sortedData.forEach((row) => {
+			const durationInMinutes = Math.round(Number(row.duration) / 60);
+			const currentStart = new Date(row.start_time);
+			const currentEnd = new Date(row.end_time);
 			
-			// Add to timeline
+			// Check if we should merge with the previous pulse
+			if (timeline.length > 0) {
+				const lastPulse = timeline[timeline.length - 1];
+				const lastEnd = new Date(lastPulse.end);
+				const timeDifference = (currentStart.getTime() - lastEnd.getTime()) / (1000 * 60); // in minutes
+				
+				// If the time difference is less than 5 minutes, merge the pulses
+				if (timeDifference < 5) {
+					// Extend the end time of the last pulse
+					lastPulse.end = row.end_time;
+					
+					// Update the duration
+					const newDuration = (currentEnd.getTime() - new Date(lastPulse.start).getTime()) / (1000 * 60);
+					lastPulse.time = Math.round(newDuration);
+					
+					// Keep the project name of the longest span or combine them if they're different
+					if (lastPulse.project !== row.project) {
+						// Option 1: Use the project with the longest duration
+						// We'll stick with the existing project as we've already calculated its merged duration
+						
+						// Option 2: Combine project names if they differ
+						// Uncomment this if you prefer combining project names
+						// lastPulse.project = `${lastPulse.project}, ${row.project}`;
+					}
+					return; // Skip adding a new pulse since we merged with the existing one
+				}
+			}
+			
+			// Add as a new pulse if no merge occurred
 			timeline.push({
 				start: row.start_time,
 				end: row.end_time,
@@ -239,9 +279,6 @@ export async function getPulses({
 				time: durationInMinutes
 			});
 		});
-		
-		// Sort timeline by start time
-		timeline.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 		
 		return {
 			computed,
