@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { getcodingTime, getTopLanguages, getPulses } from '../services/statsService'
-import { jwtAuthMiddleware } from '../middleware/jwtAuthMiddleware'
+import { cookieAuthMiddleware } from '../middleware/cookieAuthMiddleware'
 import {
 	codingTimeSchema,
 	codingTimeResponseSchema,
@@ -16,7 +16,7 @@ import { resolver } from 'hono-openapi/zod'
 
 const stats = new Hono()
 
-stats.use('*', jwtAuthMiddleware)
+stats.use('*', cookieAuthMiddleware)
 
 stats.get(
 	'/coding-time',
