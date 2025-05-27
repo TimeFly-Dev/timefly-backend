@@ -160,13 +160,16 @@ export async function getPulses({
 	endDate,
 	timeRange,
 	responseFormat = 'default'
-}: PulsesOptions): Promise<Pulse[] | DashboardResponse> {
+}: PulsesOptions): Promise<Pulse[] | Array<{ start: string; end: string; project: string; time: number }>> {
 	let dateFunction = 'toDate(start_time)'
 	let whereClause = `WHERE user_id = ${userId}`
 
-	// If startDate and endDate are provided, use them directly
-	if (!startDate && !endDate) {
-		// Otherwise, calculate the date range based on timeRange
+	if (responseFormat === 'dashboard') {
+		const todayStart = new Date()
+		todayStart.setHours(0, 0, 0, 0)
+		const todayStartStr = todayStart.toISOString().slice(0, 19).replace('T', ' ')
+		whereClause += ` AND start_time >= toDateTime('${todayStartStr}')`
+	} else if (!startDate && !endDate) {
 		switch (timeRange) {
 			case 'day':
 				dateFunction = 'toDate(start_time)'
@@ -182,7 +185,6 @@ export async function getPulses({
 				break
 		}
 	} else {
-		// If custom date range is provided
 		if (startDate) {
 			whereClause += ` AND start_time >= toDateTime('${startDate}')`
 		}
@@ -192,17 +194,16 @@ export async function getPulses({
 	}
 
 	const query = `
-    SELECT 
-      ${dateFunction} as date,
-      project,
-      language,
-      state,
-      dateDiff('second', start_time, end_time) as duration,
-      start_time,
-      end_time
-    FROM aggregated_pulses
-    ${whereClause}
-    ORDER BY start_time DESC
+	SELECT 
+	  ${dateFunction} as date,
+	  project,
+	  state,
+	  dateDiff('second', start_time, end_time) as duration,
+	  start_time,
+	  end_time
+	FROM aggregated_pulses
+	${whereClause}
+	ORDER BY start_time DESC
   `
 
 	const result = await clickhouseClient.query({
@@ -212,14 +213,10 @@ export async function getPulses({
 
 	const data = (await result.json()) as (Pulse & { state: string })[];
 
-	// If responseFormat is dashboard, transform the data
 	if (responseFormat === 'dashboard') {
-		// Create the computed object with state counts
 		const computed: Record<string, number> = {};
 		
-		// Process each pulse for computed stats
 		data.forEach((row) => {
-			// Add to computed stats by state
 			const state = row.state.toLowerCase();
 			const durationInMinutes = Math.round(Number(row.duration) / 60);
 			
@@ -229,49 +226,33 @@ export async function getPulses({
 			computed[state] += durationInMinutes;
 		});
 		
-		// Create timeline with merged pulses when time difference is < 5 minutes
 		const timeline: DashboardTimelineItem[] = [];
-		
-		// Sort data by start time for processing in chronological order
 		const sortedData = [...data].sort((a, b) => 
 			new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
 		);
 		
-		// Process pulses and merge them when appropriate
 		sortedData.forEach((row) => {
 			const durationInMinutes = Math.round(Number(row.duration) / 60);
 			const currentStart = new Date(row.start_time);
 			const currentEnd = new Date(row.end_time);
 			
-			// Check if we should merge with the previous pulse
 			if (timeline.length > 0) {
 				const lastPulse = timeline[timeline.length - 1];
 				const lastEnd = new Date(lastPulse.end);
-				const timeDifference = (currentStart.getTime() - lastEnd.getTime()) / (1000 * 60); // in minutes
+				const timeDifference = (currentStart.getTime() - lastEnd.getTime()) / (1000 * 60);
 				
-				// If the time difference is less than 5 minutes, merge the pulses
 				if (timeDifference < 5) {
-					// Extend the end time of the last pulse
 					lastPulse.end = row.end_time;
-					
-					// Update the duration
 					const newDuration = (currentEnd.getTime() - new Date(lastPulse.start).getTime()) / (1000 * 60);
 					lastPulse.time = Math.round(newDuration);
 					
-					// Keep the project name of the longest span or combine them if they're different
 					if (lastPulse.project !== row.project) {
-						// Option 1: Use the project with the longest duration
-						// We'll stick with the existing project as we've already calculated its merged duration
-						
-						// Option 2: Combine project names if they differ
-						// Uncomment this if you prefer combining project names
-						// lastPulse.project = `${lastPulse.project}, ${row.project}`;
+						// Mantenemos el proyecto existente
 					}
-					return; // Skip adding a new pulse since we merged with the existing one
+					return;
 				}
 			}
 			
-			// Add as a new pulse if no merge occurred
 			timeline.push({
 				start: row.start_time,
 				end: row.end_time,
@@ -280,21 +261,14 @@ export async function getPulses({
 			});
 		});
 		
-		return {
-			computed,
-			timeline
-		};
+		return timeline;
 	}
 
-	// Default response format
 	return data.map((row) => ({
-		date: row.date,
+		start: row.start_time,
+		end: row.end_time,
 		project: row.project,
-		language: row.language,
-		state: row.state,
-		duration: Number(row.duration),
-		start_time: row.start_time,
-		end_time: row.end_time
+		time: Math.round(Number(row.duration) / 60)
 	}))
 }
 
