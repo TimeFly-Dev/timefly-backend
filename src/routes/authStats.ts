@@ -11,12 +11,12 @@ const authStats = new Hono()
 // Apply cookie authentication middleware to all routes
 authStats.use('*', cookieAuthMiddleware)
 
-// Get authentication statistics
+// Get authentication analytics/statistics for the authenticated user
 authStats.get(
 	'/',
 	describeRoute({
-		description: 'Get authentication statistics for authenticated user',
-		tags: ['Authentication'],
+		description: 'Get authentication analytics/statistics for the authenticated user.',
+		tags: ['Auth Analytics'],
 		security: [{ bearerAuth: [] }],
 		parameters: [
 			{
@@ -34,16 +34,49 @@ authStats.get(
 		],
 		responses: {
 			200: {
-				description: 'Authentication statistics retrieved successfully'
+				description: 'Authentication analytics retrieved successfully',
+				content: {
+					'application/json': {
+						example: {
+							success: true,
+							data: {
+								stats: [
+									{
+										user_id: 1,
+										date: '2024-05-01',
+										success: true,
+										attempts: 3,
+										unique_ips: ['1.2.3.4'],
+										unique_user_agents: ['Mozilla/5.0'],
+										countries: ['US'],
+										device_types: ['Desktop'],
+										browsers: ['Chrome'],
+										operating_systems: ['Windows']
+									}
+								],
+								totalSuccess: 3,
+								totalFailure: 1,
+								uniqueIPs: 2,
+								uniqueCountries: 1,
+								uniqueDevices: 1
+							}
+						}
+					}
+				}
 			},
 			401: {
-				description: 'Unauthorized'
+				description: 'Unauthorized',
+				content: {
+					'application/json': {
+						example: { success: false, error: 'Unauthorized' }
+					}
+				}
 			}
 		}
 	}),
 	async (c) => {
 		const userId = c.get('userId')
-		logger.info(`Authentication statistics requested for user: ${userId}`)
+		logger.info(`Authentication analytics requested for user: ${userId}`)
 
 		// Get query parameters
 		const startDateParam = c.req.query('startDate')
@@ -58,16 +91,27 @@ authStats.get(
 
 			// Add date range to response
 			if (stats.success && stats.data) {
-				logger.debug(`Returning auth stats for date range: ${formatDateRange(startDate.toISOString(), endDate.toISOString())}`)
+				logger.debug(`Returning auth analytics for date range: ${formatDateRange(startDate.toISOString(), endDate.toISOString())}`)
+			}
+
+			// Ensure uniqueDevices is always present for consistency
+			if (stats.success && stats.data && typeof stats.data.uniqueDevices === 'undefined') {
+				return c.json({
+					...stats,
+					data: {
+						...stats.data,
+						uniqueDevices: 0
+					}
+				})
 			}
 
 			return c.json(stats)
 		} catch (error) {
-			logger.error(`Failed to get authentication statistics for user: ${userId}`, error)
+			logger.error(`Failed to get authentication analytics for user: ${userId}`, error)
 			return c.json(
 				{
 					success: false,
-					error: 'Failed to retrieve authentication statistics'
+					error: 'Failed to retrieve authentication analytics'
 				},
 				500
 			)
@@ -75,12 +119,12 @@ authStats.get(
 	}
 )
 
-// Get recent authentication events
+// Get recent authentication events for the authenticated user
 authStats.get(
 	'/recent',
 	describeRoute({
-		description: 'Get recent authentication events for authenticated user',
-		tags: ['Authentication'],
+		description: 'Get recent authentication events for the authenticated user.',
+		tags: ['Auth Analytics'],
 		security: [{ bearerAuth: [] }],
 		parameters: [
 			{
@@ -92,10 +136,44 @@ authStats.get(
 		],
 		responses: {
 			200: {
-				description: 'Recent authentication events retrieved successfully'
+				description: 'Recent authentication events retrieved successfully',
+				content: {
+					'application/json': {
+						example: {
+							success: true,
+							data: {
+								stats: [
+									{
+										user_id: 1,
+										date: '2024-05-01',
+										success: true,
+										attempts: 1,
+										unique_ips: ['1.2.3.4'],
+										unique_user_agents: ['Mozilla/5.0'],
+										countries: ['US'],
+										device_types: ['Desktop'],
+										browsers: ['Chrome'],
+										operating_systems: ['Windows'],
+										event_type: 1
+									}
+								],
+								totalSuccess: 1,
+								totalFailure: 0,
+								uniqueIPs: 1,
+								uniqueCountries: 1,
+								uniqueDevices: 1
+							}
+						}
+					}
+				}
 			},
 			401: {
-				description: 'Unauthorized'
+				description: 'Unauthorized',
+				content: {
+					'application/json': {
+						example: { success: false, error: 'Unauthorized' }
+					}
+				}
 			}
 		}
 	}),
@@ -109,6 +187,16 @@ authStats.get(
 
 		try {
 			const events: AuthStatsResponse = await authStatsService.getRecentEvents(userId, limit)
+			// Ensure uniqueDevices is always present for consistency
+			if (events.success && events.data && typeof events.data.uniqueDevices === 'undefined') {
+				return c.json({
+					...events,
+					data: {
+						...events.data,
+						uniqueDevices: 0
+					}
+				})
+			}
 			return c.json(events)
 		} catch (error) {
 			logger.error(`Failed to get recent authentication events for user: ${userId}`, error)

@@ -25,15 +25,19 @@ export const authStatsService = {
           user_id,
           toDate(timestamp) as date,
           success,
+          event_type,
           count() as attempts,
           arrayDistinct(groupArray(ip_address)) as unique_ips,
           arrayDistinct(groupArray(user_agent)) as unique_user_agents,
-          arrayDistinct(groupArray(country_code)) as countries
+          arrayDistinct(groupArray(country_code)) as countries,
+          arrayDistinct(groupArray(device_type)) as device_types,
+          arrayDistinct(groupArray(browser)) as browsers,
+          arrayDistinct(groupArray(os)) as operating_systems
         FROM auth_logs
         WHERE user_id = ${userId}
           AND timestamp >= toDateTime('${startDate.toISOString()}')
           AND timestamp <= toDateTime('${endDate.toISOString()}')
-        GROUP BY user_id, date, success
+        GROUP BY user_id, date, success, event_type
         ORDER BY date DESC
       `
 
@@ -100,10 +104,14 @@ export const authStatsService = {
           user_id,
           toDate(timestamp) as date,
           success,
+          event_type,
           1 as attempts,
           [ip_address] as unique_ips,
           [user_agent] as unique_user_agents,
-          [country_code] as countries
+          [country_code] as countries,
+          [device_type] as device_types,
+          [browser] as browsers,
+          [os] as operating_systems
         FROM auth_logs
         WHERE user_id = ${userId}
         ORDER BY timestamp DESC
