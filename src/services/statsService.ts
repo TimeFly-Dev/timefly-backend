@@ -272,6 +272,94 @@ export async function getPulses({
 	}))
 }
 
+/**
+ * Get the total time spent coding from aggregated pulses
+ * @param userId - User ID
+ * @param startDate - Start date in ISO format
+ * @param endDate - End date in ISO format
+ * @param aggregation - Time period aggregation (daily, weekly, monthly, yearly, total)
+ * @returns Total coding time in seconds and formatted duration
+ */
+export async function getTotalTime({
+	userId,
+	startDate,
+	endDate,
+	aggregation = 'daily'
+}: codingTimeOptions) {
+	// Ensure we have start and end dates
+	const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+	const end = endDate || new Date().toISOString()
+
+	// Validate the aggregation type
+	switch (aggregation) {
+		case 'daily':
+		case 'weekly':
+		case 'monthly':
+		case 'yearly':
+		case 'total':
+			// Valid aggregation types
+			break
+		default:
+			throw new Error(`Invalid aggregation type: ${aggregation}`)
+	}
+
+	// Query to get the total time from aggregated pulses
+	const query = `
+		SELECT
+			SUM(dateDiff('second', start_time, end_time)) as total_time
+		FROM
+			aggregated_pulses
+		WHERE
+			user_id = {userId: UInt32}
+			AND start_time >= {startDate: DateTime}
+			AND end_time <= {endDate: DateTime}
+	`
+
+	// Format dates in the format ClickHouse expects (YYYY-MM-DD HH:MM:SS)
+	const startDateObj = new Date(start);
+	const endDateObj = new Date(end);
+	
+	// Format dates without milliseconds and timezone (YYYY-MM-DD HH:MM:SS)
+	const formatDateForClickHouse = (date: Date) => {
+		return date.toISOString().replace('T', ' ').substring(0, 19);
+	};
+	
+	const formattedStartDate = formatDateForClickHouse(startDateObj);
+	const formattedEndDate = formatDateForClickHouse(endDateObj);
+	
+	const result = await clickhouseClient.query({
+		query,
+		query_params: {
+			userId,
+			startDate: formattedStartDate,
+			endDate: formattedEndDate
+		}
+	})
+
+	// Define interface for the total time results
+	interface TotalTimeResult {
+		total_time: number
+	}
+	// Cast to the appropriate type
+	const data = (await result.json()) as unknown as TotalTimeResult[]
+	
+	// If there's no data, return 0 hours
+	if (!data || !data.length || !data[0].total_time) {
+		return {
+			hours: 0
+		}
+	}
+
+	// Calculate hours from seconds and round to whole number
+	const totalTimeSeconds = Number(data[0].total_time)
+	const totalHours = Math.round(totalTimeSeconds / 3600)
+
+	return {
+		hours: totalHours
+	}
+}
+
+
 export async function getCombinedcodingTime({
 	userId,
 	startDate,

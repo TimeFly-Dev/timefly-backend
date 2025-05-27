@@ -12,18 +12,107 @@ interface WidgetData extends RowDataPacket {
   created: string
 }
 
-// Execute widget queries will import functions from statsService resolving their names by widget_query
-// const executeWidgetQueries = async (queries: any[]) => {
-//   console.log("QUERIES TO EXECUTE:",queries)
+// Import all functions from statsService to execute widget queries dynamically
+import * as statsService from './statsService'
 
-//   const results = await Promise.all(
-//     queries.map(async (query) => {
-//       const [rows] = await mysqlPool.execute<RowDataPacket[]>(query.widget_query)
-//       return { id: query.id, data: rows }
-//     })
-//   )
-//   return Object.fromEntries(results)
-// }
+// Define a type for widget query data
+interface WidgetQuery {
+  id: number | string;
+  widget_id: number | string;
+  widget_name: string;
+  widget_query: string;
+  props: Record<string, unknown> | string;
+  created: string;
+  timeRange?: string;
+  [key: string]: unknown; // Para cualquier otra propiedad que pueda existir
+}
+
+// Execute widget queries will import functions from statsService resolving their names by widget_query
+const executeWidgetQueries = async (userId: string, queries: WidgetQuery[]) => {
+  console.log("QUERIES TO EXECUTE:", queries)
+
+  // Execute each function dynamically from statsService based on the widget_query name
+  const results = await Promise.all(
+    queries.map(async (query) => {
+      try {
+        const functionName = query.widget_query.trim() as keyof typeof statsService
+        
+        if (typeof statsService[functionName] === 'function') {
+          // Definir un tipo más específico para la función
+          type StatsFunctionType = (params: Record<string, unknown>) => Promise<unknown>
+          const statsFunction = statsService[functionName] as StatsFunctionType
+          
+          // Create a 30-day lookback window as default
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          
+          // Format dates for ClickHouse (YYYY-MM-DD HH:MM:SS)
+          const formatDateForClickHouse = (date: Date) => {
+            return date.toISOString().replace('T', ' ').substring(0, 19);
+          };
+          
+          const formattedStartDate = formatDateForClickHouse(thirtyDaysAgo);
+          const formattedEndDate = formatDateForClickHouse(new Date());
+          
+          // Extract props properly - handle nested props structure
+          const widgetProps = typeof query.props === 'object' && query.props 
+            ? (query.props.props || query.props) 
+            : {};
+          
+          // Set time range based on props or default
+          const timeRange = widgetProps.timeRange || 'month';
+          
+          // Determine aggregation based on timeRange for getTotalTime
+          let _aggregation = 'daily';
+          if (functionName === 'getTotalTime') {
+            switch(timeRange) {
+              case 'day': _aggregation = 'daily'; break;
+              case 'week': _aggregation = 'weekly'; break;
+              case 'month': _aggregation = 'monthly'; break;
+              case 'year': _aggregation = 'yearly'; break;
+              default: _aggregation = 'daily';
+            }
+          }
+          
+          // Ensure dates are properly formatted for ClickHouse
+          const params: Record<string, unknown> = {
+            userId: Number(userId) || 4, // Default userId if not provided
+            startDate: formattedStartDate, // Last 30 days
+            endDate: formattedEndDate
+          }
+          
+          // Add any props from the widget
+          if (widgetProps) {
+            Object.assign(params, widgetProps)
+          }
+          
+          // Set default timeRange if not provided
+          if (!params.timeRange) {
+            params.timeRange = 'month'
+          }
+          
+          // For getTotalTime, set aggregation if not provided
+          if (functionName === 'getTotalTime' && !params.aggregation) {
+            params.aggregation = 'daily'
+          }
+          
+          console.log(`Executing ${functionName} with params:`, params);
+          const data = await statsFunction(params)
+          return { id: query.id, data: data }
+        }
+        
+        console.error(`Function ${String(functionName)} not found in statsService`)
+        return { id: query.id, data: [], error: `Function ${String(functionName)} not found` }
+      } catch (error: unknown) {
+        console.error(`Error executing widget query for ${query.id}:`, error)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        return { id: query.id, data: [], error: errorMessage }
+      }
+    })
+  )
+
+  return Object.fromEntries(results.map(result => [result.id, result.data]))
+}
 
 // Helper function to fetch widget data by ID
 const fetchWidgetById = async (widgetId: string): Promise<WidgetData> => {
@@ -110,17 +199,19 @@ export const getUserWidgets = async (userId: string): Promise<Record<string, unk
     return []
   }
 
-  // const queriesToExecute = rows.map((row) => ({
-  //   id: row.id,
-  //   widget_id: row.widget_id,
-  //   widget_name: row.widget_name,
-  //   widget_query: row.widget_query,
-  //   props: row.props,
-  //   created: row.created
-  // }))
+  const queriesToExecute = rows
+    .filter(row => row.widget_query && row.widget_query.trim() !== '')
+    .map((row) => ({
+      id: row.id,
+      widget_id: row.widget_id,
+      widget_name: row.widget_name,
+      widget_query: row.widget_query,
+      props: row.props,
+      created: row.created
+    }))
   
-  // const widgetData = await executeWidgetQueries(queriesToExecute)
-  const widgetData = {}
+  const widgetData = await executeWidgetQueries(userId, queriesToExecute)
+
   console.log("WIDGET DATA:",widgetData)
   return rows.map(row => ({
     ...formatWidgetResponse(row),
