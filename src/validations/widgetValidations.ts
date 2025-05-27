@@ -102,7 +102,7 @@ export const putUserWidgetsPositionSchema = z
   .object({
     widgets: z.array(
       z.object({
-        usersHasWidgetsId: z.string().describe('ID of users_has_widgets'),
+        usersHasWidgetsId: z.number().describe('ID of users_has_widgets'),
         position: z.number().int().min(0).describe('Nueva posición del widget')
       })
     )
