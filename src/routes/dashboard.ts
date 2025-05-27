@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { jwtAuthMiddleware } from '../middleware/jwtAuthMiddleware'
 import { describeRoute } from 'hono-openapi'
+import { cookieAuthMiddleware } from '../middleware/cookieAuthMiddleware'
 import { resolver } from 'hono-openapi/zod'
 import { z } from 'zod'
 import {
@@ -17,12 +17,11 @@ import {
 	putUserWidgetsPositionResponseSchema
 } from '../validations/widgetValidations'
 import { getWidgets, getUserWidgets, postUserWidget, updateUserWidget, deleteUserWidget, updateUserWidgetsPosition } from '@/services/widgetsService'
-import { getTodaysActivity } from '@/services/dashboardService'
 
 const dashboard = new Hono()
 
 // Replace by new Cookies middleware
-// dashboard.use('*', jwtAuthMiddleware)
+dashboard.use('*', cookieAuthMiddleware)
 
 dashboard.get(
 	'/widgets',
@@ -76,13 +75,13 @@ dashboard.get(
 dashboard.get(
 	'/user-widgets',
 	describeRoute({
-		description: "Get a user's widgets with their data",
+		description: "Get all user's widgets with their widgetData (result of widgetQuery execution)",
 		tags: ['Dashboard'],
 		parameters: [
 			{
-				name: 'userUuid',
+				name: 'userId',
 				in: 'query',
-				description: 'UUID of the user',
+				description: 'ID of the user',
 				required: true,
 				schema: { type: 'string' }
 			}
@@ -146,8 +145,8 @@ dashboard.get(
 	zValidator('query', userWidgetsSchema),
 	async (c) => {
 		try {
-			const { userUuid } = c.req.valid('query')
-			const widgets = await getUserWidgets(userUuid)
+			const { userId } = c.req.valid('query')
+			const widgets = await getUserWidgets(userId)
 			return c.json({ data: widgets })
 		} catch (error) {
 			console.error('Error fetching user widgets:', error)
@@ -230,15 +229,15 @@ dashboard.post(
 )
 
 dashboard.put(
-	'/user-widget/:userWidgetUuid',
+	'/user-widget/:userWidgetId',
 	describeRoute({
 		description: "Update a user's widget props",
 		tags: ['Dashboard'],
 		parameters: [
 			{
-				name: 'userWidgetUuid',
+				name: 'userWidgetId',
 				in: 'path',
-				description: 'UUID of the user widget to update',
+				description: 'ID of the user has widgets to update',
 				required: true,
 				schema: { type: 'string' }
 			}
@@ -309,9 +308,9 @@ dashboard.put(
 	zValidator('json', putUserWidgetSchema),
 	async (c) => {
 		try {
-			const { userWidgetUuid } = c.req.param()
+			const { userWidgetId } = c.req.param()
 			const { props } = await c.req.valid('json')
-			const response = await updateUserWidget(userWidgetUuid, props)
+			const response = await updateUserWidget(userWidgetId, props)
 			return c.json({ data: [response] })
 		} catch (error) {
 			console.error('Error updating user widget:', error)
@@ -329,15 +328,15 @@ dashboard.put(
 )
 
 dashboard.delete(
-  '/user-widget/:userWidgetUuid',
+  '/user-widget/:userWidgetId',
   describeRoute({
     description: "Delete a user's widget",
     tags: ['Dashboard'],
     parameters: [
       {
-        name: 'userWidgetUuid',
+        name: 'userWidgetId',
         in: 'path',
-        description: 'UUID of the user widget to delete',
+        description: 'ID of the user widget to delete',
         required: true,
         schema: { type: 'string' }
       }
@@ -379,19 +378,19 @@ dashboard.delete(
     }
   }),
   zValidator('param', z.object({
-    userWidgetUuid: z.string().uuid()
+    userWidgetId: z.string()
   })),
   async (c) => {
     try {
-      const { userWidgetUuid } = c.req.valid('param')
-      const deleted = await deleteUserWidget(userWidgetUuid)
+      const { userWidgetId } = c.req.valid('param')
+      const deleted = await deleteUserWidget(userWidgetId)
 
       if (!deleted) {
         return c.json(
           {
             success: false,
             error: 'User widget not found',
-            details: `No widget found with UUID: ${userWidgetUuid}`
+            details: `No widget found with ID: ${userWidgetId}`
           },
           404
         )
@@ -412,77 +411,6 @@ dashboard.delete(
   }
 )
 
-
-dashboard.get(
-	'/todays-activity',
-	describeRoute({
-		description: "Get today's coding activity timeline",
-		tags: ['Dashboard'],
-		responses: {
-			200: {
-				description: 'Successful response with today\'s activity timeline',
-				content: {
-					'application/json': {
-						schema: {
-							type: 'object',
-							properties: {
-								data: {
-									type: 'object',
-									properties: {
-										timeline: {
-											type: 'array',
-											items: {
-												type: 'object',
-												properties: {
-													start: { type: 'string', format: 'date-time' },
-													end: { type: 'string', format: 'date-time' },
-													project: { type: 'string' },
-													time: { type: 'number' }
-												},
-												required: ['start', 'end', 'project', 'time']
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			},
-			500: {
-				description: 'Internal Server Error',
-				content: {
-					'application/json': {
-						schema: {
-							type: 'object',
-							properties: {
-								success: { type: 'boolean' },
-								error: { type: 'string' },
-								details: { type: 'string' }
-							}
-						}
-					}
-				}
-			}
-		}
-	}),
-	async (c) => {
-		try {
-			// TODO: Get the actual user ID from the auth token
-			const userId = 2; // Replace with actual user ID from auth
-			const activity = await getTodaysActivity(userId);
-			return c.json(activity);
-		} catch (error: unknown) {
-			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-			console.error('Error fetching today\'s activity:', error);
-			return c.json(
-				{ success: false, error: 'Failed to fetch activity', details: errorMessage },
-				500
-			);
-		}
-	}
-)
-
 dashboard.put(
   '/user-widgets-position',
   zValidator(
@@ -492,7 +420,11 @@ dashboard.put(
   async (c) => {
     try {
       const { widgets } = c.req.valid('json')
-      await updateUserWidgetsPosition(widgets)
+      const widgetsWithCorrectFormat = widgets.map(widget => ({
+        usersHasWidgetsId: widget.usersHasWidgetsId,
+        position: widget.position
+      }))
+      await updateUserWidgetsPosition(widgetsWithCorrectFormat)
       return c.json({ success: true })
     } catch (error) {
       console.error('Error updating widgets position:', error)

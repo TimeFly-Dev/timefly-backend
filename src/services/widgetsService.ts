@@ -1,25 +1,37 @@
 // widgetsService.ts
 import { mysqlPool } from '@/db/mysql'
-import { executeWidgetQueries } from './dashboardService'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 
 // Common interface for widget data
 interface WidgetData extends RowDataPacket {
-  uuid: string
-  widget_uuid: string
+  id: string
+  widget_id: string
   widget_name: string
   widget_query: string
   props: string | Record<string, unknown>
   created: string
 }
 
-// Helper function to fetch widget data by UUID
-const fetchWidgetByUuid = async (userWidgetUuid: string): Promise<WidgetData> => {
+// Execute widget queries will import functions from statsService resolving their names by widget_query
+// const executeWidgetQueries = async (queries: any[]) => {
+//   console.log("QUERIES TO EXECUTE:",queries)
+
+//   const results = await Promise.all(
+//     queries.map(async (query) => {
+//       const [rows] = await mysqlPool.execute<RowDataPacket[]>(query.widget_query)
+//       return { id: query.id, data: rows }
+//     })
+//   )
+//   return Object.fromEntries(results)
+// }
+
+// Helper function to fetch widget data by ID
+const fetchWidgetById = async (widgetId: string): Promise<WidgetData> => {
   const [widgets] = await mysqlPool.execute<WidgetData[]>(
     `
     SELECT 
-      uhw.uuid as uuid,
-      w.uuid as widget_uuid,
+      uhw.id as id,
+      w.id as widget_id,
       w.name as widget_name,
       w.query as widget_query,
       uhw.props as props,
@@ -29,9 +41,9 @@ const fetchWidgetByUuid = async (userWidgetUuid: string): Promise<WidgetData> =>
     JOIN 
       timefly.widgets w ON w.id = uhw.widget_id
     WHERE 
-      uhw.uuid = ?
+      w.id = ?
     `,
-    [userWidgetUuid]
+    [widgetId]
   )
 
   if (!Array.isArray(widgets) || widgets.length === 0) {
@@ -43,9 +55,9 @@ const fetchWidgetByUuid = async (userWidgetUuid: string): Promise<WidgetData> =>
 
 // Helper function to format widget response
 const formatWidgetResponse = (widget: WidgetData) => ({
-  uuid: widget.uuid,
+  id: widget.id,
   position: widget.position,
-  widgetUuid: widget.widget_uuid,
+  widgetId: widget.widget_id,
   widgetName: widget.widget_name,
   widgetQuery: widget.widget_query,
   created: widget.created,
@@ -55,7 +67,7 @@ const formatWidgetResponse = (widget: WidgetData) => ({
 
 // Widget interface
 export interface Widget extends RowDataPacket {
-  uuid: string
+  id: string
   name: string
   query: string
 }
@@ -63,19 +75,19 @@ export interface Widget extends RowDataPacket {
 // Get all widgets
 export const getWidgets = async (): Promise<Widget[]> => {
   const [rows] = await mysqlPool.execute<RowDataPacket[]>(
-    'SELECT uuid, name, query FROM timefly.widgets'
+    'SELECT id, name, query FROM timefly.widgets'
   )
   return (Array.isArray(rows) ? rows : []) as Widget[]
 }
 
 // Get user widgets with their data
-export const getUserWidgets = async (userUuid: string): Promise<Record<string, unknown>[]> => {
+export const getUserWidgets = async (userId: string): Promise<Record<string, unknown>[]> => {
   const [rows] = await mysqlPool.execute<WidgetData[]>(
     `
     SELECT
-      uhw.uuid as uuid,
+      uhw.id as id,
       uhw.position as position,
-      w.uuid as widget_uuid,
+      w.id as widget_id,
       w.name as widget_name,
       w.query as widget_query,
       uhw.props as props,
@@ -87,54 +99,56 @@ export const getUserWidgets = async (userUuid: string): Promise<Record<string, u
     JOIN
       timefly.users u ON u.id = uhw.user_id
     WHERE
-      u.uuid = ?
+      u.id = ?
     ORDER BY
       uhw.position ASC
     `,
-    [userUuid]
+    [userId]
   )
 
   if (!Array.isArray(rows)) {
     return []
   }
 
-  const queriesToExecute = rows.map((row) => ({
-    uuid: row.uuid,
-    query: row.widget_query,
-    userId: row.user_id
-  }))
+  // const queriesToExecute = rows.map((row) => ({
+  //   id: row.id,
+  //   widget_id: row.widget_id,
+  //   widget_name: row.widget_name,
+  //   widget_query: row.widget_query,
+  //   props: row.props,
+  //   created: row.created
+  // }))
   
-  const widgetData = await executeWidgetQueries(queriesToExecute)
-
+  // const widgetData = await executeWidgetQueries(queriesToExecute)
+  const widgetData = {}
+  console.log("WIDGET DATA:",widgetData)
   return rows.map(row => ({
     ...formatWidgetResponse(row),
-    widgetData: widgetData[row.uuid] || {}
+    widgetData: widgetData[row.id] || {}
   }))
 }
 
 // Insert a user_has_widgets record
 export const postUserWidget = async (body: Record<string, unknown>): Promise<Record<string, unknown>> => {
-  const { userUuid, widgetUuid, props } = body
-  const userWidgetUuid = crypto.randomUUID()
+  const { userId, widgetId, props } = body
 
   try {
     // Insert the user-widget relationship
     await mysqlPool.execute<ResultSetHeader>(
       `
       INSERT INTO 
-        timefly.users_has_widgets (uuid, user_id, widget_id, props)
+        timefly.users_has_widgets (user_id, widget_id, props)
       VALUES (
-        ?, 
-        (SELECT id FROM timefly.users WHERE uuid = ?),
-        (SELECT id FROM timefly.widgets WHERE uuid = ?),
+        (SELECT id FROM timefly.users WHERE id = ?),
+        (SELECT id FROM timefly.widgets WHERE id = ?),
         ?
       )
       `,
-      [userWidgetUuid, userUuid, widgetUuid, JSON.stringify(props)]
+      [userId, widgetId, JSON.stringify(props)]
     )
 
     // Fetch and return the created widget
-    const widget = await fetchWidgetByUuid(userWidgetUuid)
+    const widget = await fetchWidgetById(widgetId)
     return formatWidgetResponse(widget)
   } catch (error) {
     if (error instanceof Error && error.message.includes('a foreign key constraint fails')) {
@@ -145,35 +159,51 @@ export const postUserWidget = async (body: Record<string, unknown>): Promise<Rec
 }
 
 // Update a user's widget props
-export const updateUserWidget = async (userWidgetUuid: string, props: Record<string, unknown>): Promise<Record<string, unknown>> => {
+export const updateUserWidget = async (userWidgetId: string, props: Record<string, unknown>): Promise<Record<string, unknown>> => {
+  // First, get the widget_id from the users_has_widgets record
+  const [widgetRecords] = await mysqlPool.execute<RowDataPacket[]>(
+    `
+    SELECT widget_id 
+    FROM timefly.users_has_widgets
+    WHERE id = ?
+    `,
+    [userWidgetId]
+  )
+
+  if (!Array.isArray(widgetRecords) || widgetRecords.length === 0) {
+    throw new Error('User widget not found')
+  }
+
+  const widgetId = widgetRecords[0].widget_id
+
   // Update the user-widget relationship
   const [result] = await mysqlPool.execute<ResultSetHeader>(
     `
     UPDATE timefly.users_has_widgets
     SET props = ?,
         updated_at = CURRENT_TIMESTAMP
-    WHERE uuid = ?
+    WHERE id = ?
     `,
-    [JSON.stringify(props), userWidgetUuid]
+    [JSON.stringify(props), userWidgetId]
   )
 
   if (result.affectedRows === 0) {
     throw new Error('User widget not found')
   }
 
-  // Fetch and return the updated widget
-  const widget = await fetchWidgetByUuid(userWidgetUuid)
+  // Fetch and return the updated widget using the widget_id
+  const widget = await fetchWidgetById(widgetId)
   return formatWidgetResponse(widget)
 }
 
 // Delete a user's widget
-export const deleteUserWidget = async (userWidgetUuid: string): Promise<boolean> => {
+export const deleteUserWidget = async (userWidgetId: string): Promise<boolean> => {
   const [result] = await mysqlPool.execute<ResultSetHeader>(
     `
     DELETE FROM timefly.users_has_widgets
-    WHERE uuid = ?
+    WHERE id = ?
     `,
-    [userWidgetUuid]
+    [userWidgetId]
   )
 
   return result.affectedRows > 0
@@ -181,15 +211,15 @@ export const deleteUserWidget = async (userWidgetUuid: string): Promise<boolean>
 
 // Update multiple widgets' positions for a user
 export const updateUserWidgetsPosition = async (
-  widgets: Array<{ usersHasWidgetsUuid: string; position: number }>
+  widgets: Array<{ usersHasWidgetsId: string; position: number }>
 ): Promise<boolean> => {
   await Promise.all(
-    widgets.map(({ position, usersHasWidgetsUuid }) =>
+    widgets.map(({ position, usersHasWidgetsId }) =>
       mysqlPool.execute(
         `UPDATE timefly.users_has_widgets 
          SET position = ?, updated_at = CURRENT_TIMESTAMP 
-         WHERE uuid = ?`,
-        [position, usersHasWidgetsUuid]
+         WHERE id = ?`,
+        [position, usersHasWidgetsId]
       )
     )
   )
