@@ -13,6 +13,8 @@ import type { GoogleUserResponse } from '@/types/auth'
 import { errorResponseSchema } from '@/validations/authValidations'
 import { authEventService } from '@/services/authEventService'
 import { logger } from '@/utils/logger'
+import { getClientIp } from '@/utils/getClientIp'
+import { parseUserAgent } from '@/utils/deviceDetection'
 
 const auth = new Hono()
 
@@ -37,11 +39,6 @@ const googleAuthConfig = {
 	redirect_uri: `${CONFIG.BASE_URL}/auth/google/callback`
 }
 
-// Helper function to get client IP
-const getClientIp = (c: Context): string => {
-	return c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || c.req.header('cf-connecting-ip') || 'unknown'
-}
-
 // Google OAuth initiation route
 auth.get(
 	'/google',
@@ -61,25 +58,27 @@ auth.get(
 auth.get(
 	'/google/callback',
 	describeRoute({
-		description: 'Handle Google OAuth callback',
+		description: 'Google OAuth callback. Redirects to the frontend with the authentication result. If it fails, returns JSON with error.',
 		tags: ['Authentication'],
 		responses: {
 			302: {
-				description: 'Redirect to frontend with authentication result'
+				description: 'Successful redirect to frontend'
 			},
 			401: {
 				description: 'Authentication failed',
 				content: {
 					'application/json': {
-						schema: resolver(errorResponseSchema)
+						schema: resolver(errorResponseSchema),
+						example: { success: false, error: 'Invalid user data' }
 					}
 				}
 			},
 			500: {
-				description: 'Server error',
+				description: 'Internal server error',
 				content: {
 					'application/json': {
-						schema: resolver(errorResponseSchema)
+						schema: resolver(errorResponseSchema),
+						example: { success: false, error: 'Server error' }
 					}
 				}
 			}
@@ -105,7 +104,8 @@ auth.get(
 					country_code: 'UN', // You might want to use a geo-ip service to get this
 					city: 'Unknown',
 					provider: 'google',
-					error_message: 'Invalid authentication data'
+					error_message: 'Invalid authentication data',
+					device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
 				})
 
 				// Redirect to frontend with error
@@ -145,7 +145,8 @@ auth.get(
 					user_agent: c.req.header('user-agent') || '',
 					country_code: 'UN',
 					city: 'Unknown',
-					provider: 'google'
+					provider: 'google',
+					device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
 				})
 			} catch (dbError) {
 				logger.error('Database operation failed:', dbError)
@@ -161,7 +162,8 @@ auth.get(
 					country_code: 'UN',
 					city: 'Unknown',
 					provider: 'google',
-					error_message: 'Database operation failed'
+					error_message: 'Database operation failed',
+					device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
 				})
 
 				// Redirect to frontend with error
@@ -209,7 +211,8 @@ auth.get(
 				country_code: 'UN',
 				city: 'Unknown',
 				provider: 'google',
-				error_message: 'Authentication failed'
+				error_message: 'Authentication failed',
+				device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
 			})
 
 			// Redirect to frontend with error
@@ -291,7 +294,8 @@ auth.post(
 				user_agent: c.req.header('user-agent') || '',
 				country_code: 'UN',
 				city: 'Unknown',
-				provider: 'local'
+				provider: 'local',
+				device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
 			})
 
 			logger.info(`Token refresh successful for user: ${userId}`)
@@ -315,7 +319,8 @@ auth.post(
 				country_code: 'UN',
 				city: 'Unknown',
 				provider: 'local',
-				error_message: 'Invalid refresh token'
+				error_message: 'Invalid refresh token',
+				device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
 			})
 
 			return c.json(
@@ -376,7 +381,8 @@ auth.post(
         user_agent: c.req.header('user-agent') || '',
         country_code: 'UN',
         city: 'Unknown',
-        provider: 'local'
+        provider: 'local',
+        device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
       })
     }
 
