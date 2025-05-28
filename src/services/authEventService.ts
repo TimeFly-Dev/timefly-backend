@@ -170,6 +170,7 @@ class AuthEventService {
           user_id,
           toDate(timestamp) as date,
           success,
+          event_type,
           count() as attempts,
           arrayDistinct(groupArray(ip_address)) as unique_ips,
           arrayDistinct(groupArray(user_agent)) as unique_user_agents,
@@ -182,7 +183,7 @@ class AuthEventService {
           AND timestamp >= toDateTime('${startDate.toISOString()}')
           AND timestamp <= toDateTime('${endDate.toISOString()}')
           AND event_type < 5 -- Only include auth events, not session events
-        GROUP BY user_id, date, success
+        GROUP BY user_id, date, success, event_type
         ORDER BY date DESC
       `
 

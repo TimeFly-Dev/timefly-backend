@@ -7,16 +7,12 @@ import { authEventService } from '../services/authEventService'
 import { logger } from '../utils/logger'
 import { getCookie } from 'hono/cookie'
 import type { AuthStatsResponse } from '../types/authEvents'
+import { getClientIp } from '../utils/getClientIp'
 
 const sessions = new Hono()
 
 // Apply cookie authentication middleware to all routes
 sessions.use('*', cookieAuthMiddleware)
-
-// Helper function to get client IP
-const getClientIp = (c: Context): string => {
-	return c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || c.req.header('cf-connecting-ip') || 'unknown'
-}
 
 // Get all active sessions for the current user
 sessions.get(
