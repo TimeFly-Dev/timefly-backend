@@ -39,3 +39,5 @@ package-lock.json
 .env
 
 exports
+/sql/export.sh
+/sql/export

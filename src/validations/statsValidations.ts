@@ -1,19 +1,19 @@
 import { z } from 'zod'
 import 'zod-openapi/extend'
 
-export const codingStatsSchema = z
+export const codingTimeSchema = z
 	.object({
 		startDate: z.string().optional().describe('Start date for the range (YYYY-MM-DD)'),
 		endDate: z.string().optional().describe('End date for the range (YYYY-MM-DD)'),
 		aggregation: z.enum(['daily', 'weekly', 'monthly', 'yearly', 'total']).describe('Type of aggregation for the stats')
 	})
-	.openapi({ ref: 'CodingStatsOptions' })
+	.openapi({ ref: 'codingTimeOptions' })
 
-export const codingStatsResponseSchema = z
+export const codingTimeResponseSchema = z
 	.object({
 		success: z.boolean(),
 		data: z.object({
-			codingHours: z.array(
+			codingTime: z.array(
 				z.object({
 					date: z.string(),
 					hours: z.number()
@@ -21,7 +21,7 @@ export const codingStatsResponseSchema = z
 			)
 		})
 	})
-	.openapi({ ref: 'CodingStatsResponse' })
+	.openapi({ ref: 'codingTimeResponse' })
 
 export const topLanguagesSchema = z
 	.object({
@@ -47,3 +47,30 @@ export const topLanguagesResponseSchema = z
 		})
 	})
 	.openapi({ ref: 'TopLanguagesResponse' })
+
+export const pulsesSchema = z
+	.object({
+		startDate: z.string().optional().describe('Start date for the range (YYYY-MM-DD)'),
+		endDate: z.string().optional().describe('End date for the range (YYYY-MM-DD)'),
+		timeRange: z.enum(['day', 'week', 'month']).describe('Time range for fetching pulses (last day, week, or month)'),
+		responseFormat: z.enum(['default', 'dashboard']).optional().default('default').describe('Format of the response')
+	})
+	.openapi({ ref: 'PulsesOptions' })
+
+export const pulsesResponseSchema = z
+	.object({
+		success: z.boolean(),
+		data: z.object({
+			pulses: z.array(
+				z.object({
+					date: z.string(),
+					project: z.string(),
+					language: z.string(),
+					duration: z.number(),
+					start_time: z.string(),
+					end_time: z.string()
+				})
+			)
+		})
+	})
+	.openapi({ ref: 'PulsesResponse' })

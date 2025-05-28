@@ -37,6 +37,11 @@ const ENV_VARS: EnvVarDefinitions = {
 	RESEND_API_KEY: { type: 'string', required: true },
 	EMAIL_FROM: { type: 'string', required: true },
 
+	// Stripe configuration
+	STRIPE_SECRET_KEY: { type: 'string', required: true },
+	STRIPE_PUBLISHABLE_KEY: { type: 'string', required: true },
+	STRIPE_WEBHOOK_SECRET: { type: 'string', required: true },
+
 	// Logging configuration
 	AUTH_LOG_BATCH_SIZE: { type: 'number', required: false, default: 100 },
 	AUTH_LOG_PROCESS_INTERVAL: { type: 'number', required: false, default: 5000 }
@@ -108,6 +113,9 @@ const verifyConfigProperties = (config: Record<string, unknown>): void => {
 		'CLICKHOUSE_PASSWORD',
 		'RESEND_API_KEY',
 		'EMAIL_FROM',
+		'STRIPE_SECRET_KEY',
+		'STRIPE_PUBLISHABLE_KEY',
+		'STRIPE_WEBHOOK_SECRET',
 		'AUTH_LOG_BATCH_SIZE',
 		'AUTH_LOG_PROCESS_INTERVAL'
 	]

@@ -15,6 +15,7 @@ import { apiKeys } from './routes/apiKeys'
 import { apiKeyStats } from './routes/apiKeyStats'
 import { authStats } from './routes/authStats'
 import { sessions } from './routes/sessions'
+import { stripeRoutes } from './routes/stripe'
 import { logger } from './utils/logger'
 
 const app = new Hono()
@@ -48,6 +49,7 @@ app.route('/api-key-stats', apiKeyStats)
 app.route('/auth-stats', authStats)
 app.route('/sessions', sessions)
 app.route('/dashboard', dashboard)
+app.route('/payments', stripeRoutes)
 
 
 // OpenAPI documentation

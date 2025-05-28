@@ -10,7 +10,7 @@ export const widgetsResponseSchema = z
   .object({
     data: z.array(
       z.object({
-        uuid: z.string(),
+        id: z.string(),
         name: z.string(),
         query: z.string(),
       })
@@ -21,15 +21,15 @@ export const widgetsResponseSchema = z
 // GET /user-widgets
 export const userWidgetsSchema = z
   .object({
-    userUuid: z.string().describe('UUID of the user for which to retrieve the widgets')
+    userId: z.string().describe('ID of the user for which to retrieve the widgets')
   })
   .openapi({ ref: 'UserWidgetsOptions' })
 export const userWidgetsResponseSchema = z
   .object({
     data: z.array(
       z.object({
-        uuid: z.string(),
-        widgetUuid: z.string(),
+        id: z.string(),
+        widgetId: z.string(),
         widgetName: z.string(),
         widgetQuery: z.string(),
         created: z.string(),
@@ -43,8 +43,8 @@ export const userWidgetsResponseSchema = z
 // POST /user-widget
 export const postUserWidgetSchema = z
   .object({
-    userUuid: z.string().describe('UUID of the user'),
-    widgetUuid: z.string().describe('UUID of the widget to insert'),
+    userId: z.number().describe('ID of the user'),
+    widgetId: z.number().describe('ID of the widget to insert'),
     props: z.object({}).describe('Widget props (e.g. skin, timeRange)')
   })
   .openapi({ ref: 'PostUserWidgetOptions' })
@@ -53,8 +53,8 @@ export const postUserWidgetResponseSchema = z
   .object({
     data: z.array(
       z.object({
-        uuid: z.string(),
-        widgetUuid: z.string(),
+        id: z.string(),
+        widgetId: z.string(),
         widgetName: z.string(),
         widgetQuery: z.string(),
         created: z.string(),
@@ -71,15 +71,15 @@ export const putUserWidgetSchema = z
   })
   .openapi({ 
     ref: 'PutUserWidgetOptions',
-    description: 'Update widget props. The userWidgetUuid is provided in the URL path.'
+    description: 'Update widget props. The userWidgetId is provided in the URL path.'
   })
 
 export const putUserWidgetResponseSchema = z
   .object({
     data: z.array(
       z.object({
-        uuid: z.string(),
-        widgetUuid: z.string(),
+        id: z.string(),
+        widgetId: z.string(),
         widgetName: z.string(),
         widgetQuery: z.string(),
         created: z.string(),
@@ -89,10 +89,30 @@ export const putUserWidgetResponseSchema = z
     )
   })
 
-  // DELETE /user-widget/:userWidgetUuid
+  // DELETE /user-widget/:userWidgetId
 export const deleteUserWidgetSchema = z
   .object({})
   .openapi({ 
     ref: 'DeleteUserWidgetOptions',
-    description: 'Delete a user widget. The userWidgetUuid is provided in the URL path.'
+    description: 'Delete a user widget. The userWidgetId is provided in the URL path.'
   })
+
+// PUT /user-widgets-position
+export const putUserWidgetsPositionSchema = z
+  .object({
+    widgets: z.array(
+      z.object({
+        usersHasWidgetsId: z.number().describe('ID of users_has_widgets'),
+        position: z.number().int().min(0).describe('Nueva posición del widget')
+      })
+    )
+  })
+  .openapi({ ref: 'PutUserWidgetsPositionOptions' })
+
+export const putUserWidgetsPositionResponseSchema = z
+  .object({
+    success: z.boolean(),
+    error: z.string().optional(),
+    details: z.string().optional()
+  })
+  .openapi({ ref: 'PutUserWidgetsPositionResponse' })
