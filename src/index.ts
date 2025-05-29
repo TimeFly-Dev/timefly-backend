@@ -41,14 +41,19 @@ app.get('/', (c) => {
 })
 
 app.route('/auth', auth)
-app.route('/sync', sync)
-app.route('/stats', stats)
-app.route('/exports', exports)
+app.route('/auth-stats', authStats)
+
 app.route('/api-keys', apiKeys)
 app.route('/api-key-stats', apiKeyStats)
-app.route('/auth-stats', authStats)
+
 app.route('/sessions', sessions)
+
+app.route('/sync', sync)
+app.route('/exports', exports)
+
+app.route('/stats', stats)
 app.route('/dashboard', dashboard)
+
 app.route('/payments', stripeRoutes)
 
 
