@@ -237,11 +237,15 @@ async function initClickhouse() {
           id UUID DEFAULT generateUUIDv4(),
           user_id UInt32,
           timestamp DateTime64(3),
-          event_type Enum('created' = 1, 'regenerated' = 2),
+          event_type Enum('created' = 1, 'regenerated' = 2, 'revoked' = 3, 'last_used' = 4),
           ip_address String,
           user_agent String,
           country_code LowCardinality(String) DEFAULT '',
           city LowCardinality(String) DEFAULT '',
+          device_name String DEFAULT '',
+          device_type String DEFAULT '',
+          browser String DEFAULT '',
+          os String DEFAULT '',
           created_at DateTime DEFAULT now()
         )
         ENGINE = MergeTree()
@@ -261,7 +265,13 @@ async function initClickhouse() {
           user_id,
           toDate(timestamp) as date,
           event_type,
-          count() as event_count
+          count() as event_count,
+          arrayDistinct(groupArray(ip_address)) as unique_ips,
+          arrayDistinct(groupArray(user_agent)) as unique_user_agents,
+          arrayDistinct(groupArray(country_code)) as countries,
+          arrayDistinct(groupArray(device_type)) as device_types,
+          arrayDistinct(groupArray(browser)) as browsers,
+          arrayDistinct(groupArray(os)) as operating_systems
         FROM api_key_events
         GROUP BY user_id, date, event_type
       `

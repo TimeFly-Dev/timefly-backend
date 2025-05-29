@@ -13,6 +13,10 @@ interface EventInfo {
 	readonly user_agent: string
 	readonly country_code?: string
 	readonly city?: string
+	readonly device_name?: string
+	readonly device_type?: string
+	readonly browser?: string
+	readonly os?: string
 }
 
 /**
@@ -31,10 +35,33 @@ export const createApiKey = async (userId: number, eventInfo?: EventInfo): Promi
 	const connection = await mysqlPool.getConnection()
 
 	try {
+		// Check if user already has an active API key
+		const [existingKeys] = await connection.execute<mysql.RowDataPacket[]>(
+			'SELECT api_key, api_key_revoked_at FROM users WHERE id = ?',
+			[userId]
+		)
+
+		if (existingKeys.length > 0 && existingKeys[0].api_key && !existingKeys[0].api_key_revoked_at) {
+			logger.warn(`User ${userId} already has an active API key. Use regenerateApiKey instead.`)
+			throw new Error('User already has an active API key')
+		}
+
 		const apiKey = generateRandomApiKey()
 		logger.debug(`Creating new API key for user: ${userId}`)
 
-		await connection.execute('UPDATE users SET api_key = ?, api_key_created_at = CURRENT_TIMESTAMP WHERE id = ?', [apiKey, userId])
+		await connection.execute(
+			`UPDATE users 
+       SET api_key = ?, 
+           api_key_created_at = CURRENT_TIMESTAMP,
+           api_key_last_used_at = NULL,
+           api_key_last_used_ip = NULL,
+           api_key_last_used_user_agent = NULL,
+           api_key_usage_count = 0,
+           api_key_revoked_at = NULL,
+           api_key_revoked_reason = NULL
+       WHERE id = ?`,
+			[apiKey, userId]
+		)
 
 		logger.info(`API key created successfully for user: ${userId}`)
 
@@ -47,7 +74,11 @@ export const createApiKey = async (userId: number, eventInfo?: EventInfo): Promi
 				ip_address: eventInfo.ip_address,
 				user_agent: eventInfo.user_agent,
 				country_code: eventInfo.country_code,
-				city: eventInfo.city
+				city: eventInfo.city,
+				device_name: eventInfo.device_name,
+				device_type: eventInfo.device_type,
+				browser: eventInfo.browser,
+				os: eventInfo.os
 			}
 
 			await apiKeyLoggingService.logEvent(eventData)
@@ -74,19 +105,39 @@ export const regenerateApiKey = async (userId: number, eventInfo?: EventInfo): P
 	try {
 		logger.debug(`Starting API key regeneration for user: ${userId}`)
 
-		// Generate a new API key
-		const apiKey = generateRandomApiKey()
-
 		// Get the current API key for logging purposes
-		const [currentKeys] = await connection.execute<mysql.RowDataPacket[]>('SELECT api_key FROM users WHERE id = ?', [userId])
+		const [currentKeys] = await connection.execute<mysql.RowDataPacket[]>(
+			'SELECT api_key, api_key_created_at FROM users WHERE id = ?',
+			[userId]
+		)
 
-		const currentKey = currentKeys.length > 0 ? currentKeys[0].api_key : null
+		if (currentKeys.length === 0) {
+			throw new Error('User not found')
+		}
 
-		// Update the user's API key
-		await connection.execute('UPDATE users SET api_key = ?, api_key_created_at = CURRENT_TIMESTAMP WHERE id = ?', [apiKey, userId])
+		const currentKey = currentKeys[0].api_key
+		const _currentKeyCreatedAt = currentKeys[0].api_key_created_at
+
+		// Generate a new API key
+		const newApiKey = generateRandomApiKey()
+
+		// Update the user's API key and invalidate the old one
+		await connection.execute(
+			`UPDATE users 
+       SET api_key = ?, 
+           api_key_created_at = CURRENT_TIMESTAMP,
+           api_key_last_used_at = NULL,
+           api_key_last_used_ip = NULL,
+           api_key_last_used_user_agent = NULL,
+           api_key_usage_count = 0,
+           api_key_revoked_at = CURRENT_TIMESTAMP,
+           api_key_revoked_reason = 'Regenerated'
+       WHERE id = ?`,
+			[newApiKey, userId]
+		)
 
 		// Verify the key was actually changed
-		if (currentKey && currentKey === apiKey) {
+		if (currentKey && currentKey === newApiKey) {
 			logger.warn(`Generated API key is identical to previous key for user: ${userId}. This is extremely unlikely.`)
 		}
 
@@ -94,20 +145,42 @@ export const regenerateApiKey = async (userId: number, eventInfo?: EventInfo): P
 
 		// Log the event to ClickHouse if eventInfo is provided
 		if (eventInfo) {
-			const eventData: ApiKeyEventInput = {
+			// Log the revocation of the old key
+			if (currentKey) {
+				const revokeEventData: ApiKeyEventInput = {
+					user_id: userId,
+					timestamp: new Date(),
+					event_type: 'revoked',
+					ip_address: eventInfo.ip_address,
+					user_agent: eventInfo.user_agent,
+					country_code: eventInfo.country_code,
+					city: eventInfo.city,
+					device_name: eventInfo.device_name,
+					device_type: eventInfo.device_type,
+					browser: eventInfo.browser,
+					os: eventInfo.os
+				}
+				await apiKeyLoggingService.logEvent(revokeEventData)
+			}
+
+			// Log the creation of the new key
+			const createEventData: ApiKeyEventInput = {
 				user_id: userId,
 				timestamp: new Date(),
-				event_type: 'regenerated',
+				event_type: 'created',
 				ip_address: eventInfo.ip_address,
 				user_agent: eventInfo.user_agent,
 				country_code: eventInfo.country_code,
-				city: eventInfo.city
+				city: eventInfo.city,
+				device_name: eventInfo.device_name,
+				device_type: eventInfo.device_type,
+				browser: eventInfo.browser,
+				os: eventInfo.os
 			}
-
-			await apiKeyLoggingService.logEvent(eventData)
+			await apiKeyLoggingService.logEvent(createEventData)
 		}
 
-		return apiKey
+		return newApiKey
 	} catch (error) {
 		logger.error(`Failed to regenerate API key for user ${userId}:`, error)
 		throw error

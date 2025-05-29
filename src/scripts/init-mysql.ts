@@ -15,6 +15,11 @@ async function initMysql() {
           api_key VARCHAR(64) UNIQUE,
           api_key_created_at TIMESTAMP NULL,
           api_key_last_used_at TIMESTAMP NULL,
+          api_key_last_used_ip VARCHAR(45) NULL,
+          api_key_last_used_user_agent VARCHAR(255) NULL,
+          api_key_usage_count INT DEFAULT 0,
+          api_key_revoked_at TIMESTAMP NULL,
+          api_key_revoked_reason VARCHAR(255) NULL,
           stripe_customer_id VARCHAR(255) UNIQUE NULL,
           subscription_status VARCHAR(50) DEFAULT 'inactive',
           subscription_id VARCHAR(255) UNIQUE NULL,
@@ -27,7 +32,12 @@ async function initMysql() {
           billing_cycle VARCHAR(20) NULL,
           mrr DECIMAL(10,2) DEFAULT 0.00,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_api_key (api_key),
+          INDEX idx_api_key_last_used (api_key_last_used_at),
+          INDEX idx_api_key_revoked (api_key_revoked_at),
+          INDEX idx_api_key_created (api_key_created_at),
+          INDEX idx_api_key_status (api_key, api_key_revoked_at)
         )
     `)
 
