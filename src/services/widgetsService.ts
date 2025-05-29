@@ -96,7 +96,6 @@ const executeWidgetQueries = async (userId: string, queries: WidgetQuery[]) => {
             params.aggregation = 'daily'
           }
           
-          console.log(`Executing ${functionName} with params:`, params);
           const data = await statsFunction(params)
           return { id: query.id, data: data }
         }
@@ -212,7 +211,6 @@ export const getUserWidgets = async (userId: string): Promise<Record<string, unk
   
   const widgetData = await executeWidgetQueries(userId, queriesToExecute)
 
-  console.log("WIDGET DATA:",widgetData)
   return rows.map(row => ({
     ...formatWidgetResponse(row),
     widgetData: widgetData[row.id] || {}
