@@ -96,11 +96,39 @@ async function initClickhouse() {
           sync_duration_ms UInt32,
           success Bool,
           error_message String DEFAULT '',
+          request_id String,
+          timezone String,
+          user_agent String,
+          ip_address String,
           created_at DateTime DEFAULT now()
         )
         ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (user_id, timestamp)
+      `
+		})
+
+		// Add materialized view for sync statistics
+		await clickhouseClient.exec({
+			query: `
+        CREATE MATERIALIZED VIEW IF NOT EXISTS sync_stats
+        ENGINE = SummingMergeTree()
+        PARTITION BY toYYYYMM(date)
+        ORDER BY (user_id, date)
+        AS SELECT
+          user_id,
+          toDate(timestamp) as date,
+          count() as total_syncs,
+          sum(pulses_count) as total_pulses,
+          sum(aggregated_pulses_count) as total_aggregated_pulses,
+          avg(sync_duration_ms) as avg_sync_duration,
+          sum(if(success, 1, 0)) as successful_syncs,
+          sum(if(not success, 1, 0)) as failed_syncs,
+          arrayDistinct(groupArray(timezone)) as timezones,
+          arrayDistinct(groupArray(user_agent)) as user_agents,
+          arrayDistinct(groupArray(ip_address)) as ip_addresses
+        FROM sync_events
+        GROUP BY user_id, date
       `
 		})
 

@@ -1,12 +1,10 @@
 import { clickhouseClient } from '../db/clickhouse'
-import type { Pulse, AggregatedPulse, SyncData } from '../types/sync'
+import type { Pulse, AggregatedPulse, SyncData, SyncEventMetadata } from '../types/sync'
 
-// Función para determinar si un objeto es un pulso o un pulso agregado
 function isPulse(obj: Pulse | AggregatedPulse): obj is Pulse {
 	return 'time' in obj && typeof obj.time === 'number'
 }
 
-// Función para sincronizar pulsos y pulsos agregados
 export async function syncTimeEntries(
 	userId: number,
 	syncData: SyncData
@@ -19,7 +17,6 @@ export async function syncTimeEntries(
 	const aggregatedPulses: AggregatedPulse[] = []
 	const errors: string[] = []
 
-	// Separar pulsos y pulsos agregados
 	syncData.data.forEach((item) => {
 		try {
 			if (isPulse(item)) {
@@ -40,7 +37,6 @@ export async function syncTimeEntries(
 		}
 	}
 
-	// Sincronizar pulsos agregados si hay alguno
 	if (aggregatedPulses.length > 0) {
 		try {
 			await syncAggregatedPulses(userId, aggregatedPulses, syncData.timezone)
@@ -151,13 +147,27 @@ export async function logSyncEvent(
 	aggregatedPulsesCount: number,
 	syncDuration: number,
 	success: boolean,
-	errorMessage = ''
+	errorMessage = '',
+	metadata?: SyncEventMetadata
 ): Promise<void> {
 	const query = `
     INSERT INTO sync_events 
-    (user_id, timestamp, machine_name_id, pulses_count, aggregated_pulses_count, sync_duration_ms, success, error_message)
+    (user_id, timestamp, machine_name_id, pulses_count, aggregated_pulses_count, sync_duration_ms, success, error_message, request_id, timezone, user_agent, ip_address)
     VALUES 
-    (${userId}, now64(), 'server', ${pulsesCount}, ${aggregatedPulsesCount}, ${syncDuration}, ${success ? 1 : 0}, '${escapeString(errorMessage)}')
+    (
+      ${userId}, 
+      now64(), 
+      'server', 
+      ${pulsesCount}, 
+      ${aggregatedPulsesCount}, 
+      ${syncDuration}, 
+      ${success ? 1 : 0}, 
+      '${escapeString(errorMessage)}',
+      '${metadata?.requestId || ''}',
+      '${metadata?.timezone || ''}',
+      '${metadata?.userAgent ? escapeString(metadata.userAgent) : ''}',
+      '${metadata?.ipAddress ? escapeString(metadata.ipAddress) : ''}'
+    )
   `
 
 	await clickhouseClient.exec({

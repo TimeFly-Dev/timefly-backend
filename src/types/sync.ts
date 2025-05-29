@@ -50,3 +50,10 @@ export interface SyncResponse {
 	syncedCount?: number
 	errors?: string[]
 }
+
+export interface SyncEventMetadata {
+	requestId: string
+	timezone: string
+	userAgent?: string
+	ipAddress?: string
+}
