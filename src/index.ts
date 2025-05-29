@@ -4,7 +4,7 @@ import { logger as honoLogger } from 'hono/logger'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { openAPISpecs } from 'hono-openapi'
-import { Scalar } from '@scalar/hono-api-reference'
+import { apiReference } from '@scalar/hono-api-reference'
 import { CONFIG } from './config'
 import { auth } from './routes/auth'
 import { sync } from './routes/sync'
@@ -84,7 +84,7 @@ app.get(
 // Scalar API Reference UI
 app.get(
 	'/docs',
-	Scalar({
+	apiReference({
 		url: '/openapi',
 		theme: 'default'
 	})
