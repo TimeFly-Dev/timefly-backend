@@ -15,11 +15,11 @@ export async function getTop3(props: {
 	lastProject?: string
 }>> {
 	const { userId, timeRange = 'all', entity, startDate, endDate } = props
-	
+
 	// Determine which field to group by based on the entity
 	let groupByField: string
 	let whereCondition = ''
-	
+
 	switch (entity) {
 		case 'languages':
 			groupByField = 'language'
@@ -41,36 +41,32 @@ export async function getTop3(props: {
 		default:
 			throw new Error(`Invalid entity: ${entity}`)
 	}
-	
+
 	let whereClause = `WHERE user_id = ${userId} ${whereCondition}`
-	let dateFunction: string
 
-	switch (timeRange) {
-		case 'day':
-			dateFunction = 'toDate(start_time)'
-			whereClause += ` AND ${dateFunction} = today()`
-			break
-		case 'week':
-			dateFunction = 'toStartOfWeek(start_time)'
-			whereClause += ` AND ${dateFunction} = toStartOfWeek(now())`
-			break
-		case 'month':
-			dateFunction = 'toStartOfMonth(start_time)'
-			whereClause += ` AND ${dateFunction} = toStartOfMonth(now())`
-			break
-		case 'year':
-			dateFunction = 'toStartOfYear(start_time)'
-			whereClause += ` AND ${dateFunction} = toStartOfYear(now())`
-			break
-		default:
-			dateFunction = 'toDate(start_time)'
-	}
-
-	if (startDate) {
-		whereClause += ` AND start_time >= toDateTime('${startDate}')`
-	}
-	if (endDate) {
-		whereClause += ` AND end_time <= toDateTime('${endDate}')`
+	// apply date filters: custom range overrides period
+	if (startDate || endDate) {
+		if (startDate) {
+			whereClause += ` AND start_time >= toDateTime(${startDate})`
+		}
+		if (endDate) {
+			whereClause += ` AND end_time <= toDateTime(${endDate})`
+		}
+	} else {
+		switch (timeRange) {
+			case 'day':
+				whereClause += ' AND start_time >= today() AND start_time < addDays(today(), 1)'
+				break
+			case 'week':
+				whereClause += ' AND start_time >= toStartOfWeek(now()) AND start_time < addDays(toStartOfWeek(now()), 7)'
+				break
+			case 'month':
+				whereClause += ' AND start_time >= toStartOfMonth(now()) AND start_time < addMonths(toStartOfMonth(now()), 1)'
+				break
+			case 'year':
+				whereClause += ' AND start_time >= toStartOfYear(now()) AND start_time < addYears(toStartOfYear(now()), 1)'	
+				break
+		}
 	}
 
 	// Query the aggregated_pulses table directly
@@ -171,44 +167,44 @@ export async function getPulses({
 
 	if (responseFormat === 'dashboard') {
 		const computed: Record<string, number> = {};
-		
+
 		data.forEach((row) => {
 			const state = row.state.toLowerCase();
 			const durationInMinutes = Math.round(Number(row.duration) / 60);
-			
+
 			if (!computed[state]) {
 				computed[state] = 0;
 			}
 			computed[state] += durationInMinutes;
 		});
-		
+
 		const timeline: DashboardTimelineItem[] = [];
-		const sortedData = [...data].sort((a, b) => 
+		const sortedData = [...data].sort((a, b) =>
 			new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
 		);
-		
+
 		sortedData.forEach((row) => {
 			const durationInMinutes = Math.round(Number(row.duration) / 60);
 			const currentStart = new Date(row.start_time);
 			const currentEnd = new Date(row.end_time);
-			
+
 			if (timeline.length > 0) {
 				const lastPulse = timeline[timeline.length - 1];
 				const lastEnd = new Date(lastPulse.end);
 				const timeDifference = (currentStart.getTime() - lastEnd.getTime()) / (1000 * 60);
-				
+
 				if (timeDifference < 5) {
 					lastPulse.end = row.end_time;
 					const newDuration = (currentEnd.getTime() - new Date(lastPulse.start).getTime()) / (1000 * 60);
 					lastPulse.time = Math.round(newDuration);
-					
+
 					if (lastPulse.project !== row.project) {
 						// Mantenemos el proyecto existente
 					}
 					return;
 				}
 			}
-			
+
 			timeline.push({
 				start: row.start_time,
 				end: row.end_time,
@@ -216,7 +212,7 @@ export async function getPulses({
 				time: durationInMinutes
 			});
 		});
-		
+
 		return timeline;
 	}
 
@@ -250,31 +246,30 @@ export async function getPulseStates({
 	// Build the where clause based on the parameters
 	// Ensure we only get records with valid states (coding or debugging)
 	let whereClause = `WHERE user_id = ${userId}`
-	
-	// Handle time period filtering
-	switch (period) {
-		case 'day':
-			whereClause +=  'AND toDate(start_time) = today()'
-			break
-		case 'week':
-			whereClause += ' AND toStartOfWeek(start_time) = toStartOfWeek(now())'
-			break
-		case 'month':
-			whereClause += ' AND toStartOfMonth(start_time) = toStartOfMonth(now())'
-			break
-		case 'year':
-			whereClause += ' AND toStartOfYear(start_time) = toStartOfYear(now())'
-			break
-		default:
-			// For 'all', no additional time filter needed
-	}
 
-	// Add custom date range if provided
-	if (startDate) {
-		whereClause += ` AND start_time >= toDateTime('${startDate}')`
-	}
-	if (endDate) {
-		whereClause += ` AND end_time <= toDateTime('${endDate}')`
+	// apply date filters: custom range overrides period
+	if (startDate || endDate) {
+		if (startDate) {
+			whereClause +=  `AND start_time >= toDateTime(${startDate})`
+		}
+		if (endDate) {
+			whereClause += `AND end_time <= toDateTime(${endDate})`
+		}
+	} else {
+		switch (period) {
+			case 'day':
+				whereClause += ' AND toDate(start_time) = today()'
+				break
+			case 'week':
+				whereClause += ' AND toStartOfWeek(start_time) = toStartOfWeek(now())'
+				break
+			case 'month':
+				whereClause += ' AND toStartOfMonth(start_time) = toStartOfMonth(now())'
+				break
+			case 'year':
+				whereClause += ' AND toStartOfYear(start_time) = toStartOfYear(now())'
+				break
+		}
 	}
 
 	// Query to get total time and time per state
@@ -303,12 +298,12 @@ export async function getPulseStates({
 
 		// Parse the result
 		const data = await result.json() as Array<{ state: string; state_time: string; percentage: number }>
-		
+
 		// Handle case where no data is returned
 		if (data.length === 0) {
-			return { items: [] }
+			return {}
 		}
-		
+
 		// Transform the array into an object with state as key and percentage as value
 		// Using functional approach with reduce
 		const statePercentages = data.reduce((acc, { state, percentage }) => {
@@ -320,7 +315,7 @@ export async function getPulseStates({
 			}
 			return acc
 		}, {} as Record<string, number>)
-		
+
 		// Return all detected states without expecting specific values
 		return statePercentages
 	} catch (error) {
@@ -454,11 +449,11 @@ export async function getCombinedcodingTime({
 	// as it already contains the summarized data
 
 	const result = await getCodingTime({ userId, startDate, endDate, date, aggregation });
-	
+
 	// Transform the result into the expected codingTime[] format
 	// Use the current date or provided date as the date property
 	const formattedDate = date || new Date().toISOString().split('T')[0];
-	
+
 	// Convert hours to string format as required by the codingTime interface
 	return [{
 		date: formattedDate,
