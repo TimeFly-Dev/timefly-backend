@@ -64,7 +64,7 @@ export async function getTop3(props: {
 				whereClause += ' AND start_time >= toStartOfMonth(now()) AND start_time < addMonths(toStartOfMonth(now()), 1)'
 				break
 			case 'year':
-				whereClause += ' AND start_time >= toStartOfYear(now()) AND start_time < addYears(toStartOfYear(now()), 1)'	
+				whereClause += ' AND start_time >= toStartOfYear(now()) AND start_time < addYears(toStartOfYear(now()), 1)'
 				break
 		}
 	}
@@ -250,10 +250,10 @@ export async function getPulseStates({
 	// apply date filters: custom range overrides period
 	if (startDate || endDate) {
 		if (startDate) {
-			whereClause +=  `AND start_time >= toDateTime(${startDate})`
+			whereClause += ` AND start_time >= toDateTime('${startDate}')`
 		}
 		if (endDate) {
-			whereClause += `AND end_time <= toDateTime(${endDate})`
+			whereClause += ` AND end_time <= toDateTime('${endDate}')`
 		}
 	} else {
 		switch (period) {
