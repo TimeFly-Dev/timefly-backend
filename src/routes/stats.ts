@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { getcodingTime, getTopLanguages, getPulses } from '../services/statsService'
+import { getCodingTime, getTop3, getPulses } from '../services/statsService'
 import { cookieAuthMiddleware } from '../middleware/cookieAuthMiddleware'
 import {
 	codingTimeSchema,
@@ -41,7 +41,7 @@ stats.get(
 		const { startDate, endDate, aggregation } = c.req.valid('query')
 
 		try {
-			const codingTime = await getcodingTime({
+			const codingTime = await getCodingTime({
 				userId,
 				startDate,
 				endDate,
@@ -75,15 +75,15 @@ stats.get(
 	zValidator('query', topLanguagesSchema),
 	async (c) => {
 		const userId = c.get('userId')
-		const { startDate, endDate, limit, period } = c.req.valid('query')
+		const { startDate, endDate, period } = c.req.valid('query')
 
 		try {
-			const topLanguages = await getTopLanguages({
+			const topLanguages = await getTop3({
 				userId,
 				startDate,
 				endDate,
-				limit,
-				period
+				timeRange: period,
+				entity: 'languages'
 			})
 			return c.json({ success: true, data: { topLanguages } })
 		} catch (error) {
