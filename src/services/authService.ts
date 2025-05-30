@@ -4,21 +4,12 @@ import { authEventService } from './authEventService'
 import { parseUserAgent } from '../utils/deviceDetection'
 import type { CreateSessionInput } from '../types/sessions'
 import type { ClientInfo } from '../types/auth'
-import type { Context } from 'hono'
 import { 
   generateAccessToken, 
   generateRefreshToken, 
   verifyAccessToken as verifyToken, 
   verifyRefreshTokenPayload 
 } from '../utils/tokenUtils'
-
-/**
- * Client information interface for session tracking
- */
-// interface ClientInfo {
-//   ipAddress: string
-//   userAgent: string
-// }
 
 /**
  * Generates JWT tokens for authentication
@@ -45,7 +36,43 @@ export async function generateTokens(
   // Parse user agent for session details
   const userAgent = parseUserAgent(clientInfo.userAgent)
 
-  // Create session in database
+  // Prepare session data
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+  
+  // Check if there's an existing session for this user and device
+  try {
+    const existingSession = await sessionService.findExistingSession(
+      dbUser.id,
+      userAgent.browser,
+      userAgent.os,
+      userAgent.deviceType,
+      clientInfo.ipAddress
+    )
+
+    if (existingSession) {
+      logger.info(`Found existing session for user ${dbUser.id} on device ${userAgent.deviceName}. Updating instead of creating new.`)
+      
+      // Update the existing session with the new token
+      await sessionService.updateSessionToken(existingSession.id, tokenId, expiresAt)
+      
+      // Log session update
+      await authEventService.logSessionEventWithoutContext(
+        dbUser.id,
+        dbUser.email,
+        'refreshed',
+        clientInfo.ipAddress,
+        clientInfo.userAgent,
+        tokenId
+      )
+      
+      return { accessToken, refreshToken, tokenId }
+    }
+  } catch (error) {
+    // If there's an error checking for existing sessions, log it but continue with creating a new session
+    logger.error(`Error checking for existing sessions: ${error}. Will create new session.`)
+  }
+
+  // Create a new session if no existing one was found or if there was an error
   const sessionData: CreateSessionInput = {
     user_id: dbUser.id,
     refresh_token: tokenId,
@@ -54,12 +81,12 @@ export async function generateTokens(
     device_type: userAgent.deviceType,
     browser: userAgent.browser,
     os: userAgent.os,
-    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+    expires_at: expiresAt
   }
 
   await sessionService.createSession(sessionData)
 
-  // Log successful authentication
+  // Log successful authentication with new session
   await authEventService.logSessionEventWithoutContext(
     dbUser.id,
     dbUser.email,

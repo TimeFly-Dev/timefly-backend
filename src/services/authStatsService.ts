@@ -20,6 +20,12 @@ export const authStatsService = {
 				endDate: endDate.toISOString()
 			})
 
+			// Format dates for ClickHouse (YYYY-MM-DD HH:mm:ss)
+			const formatDate = (date: Date) => {
+				const pad = (n: number) => n.toString().padStart(2, '0')
+				return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+			}
+
 			const query = `
         SELECT 
           user_id,
@@ -35,8 +41,8 @@ export const authStatsService = {
           arrayDistinct(groupArray(os)) as operating_systems
         FROM auth_logs
         WHERE user_id = ${userId}
-          AND timestamp >= toDateTime('${startDate.toISOString()}')
-          AND timestamp <= toDateTime('${endDate.toISOString()}')
+          AND timestamp >= toDateTime('${formatDate(startDate)}')
+          AND timestamp <= toDateTime('${formatDate(endDate)}')
         GROUP BY user_id, date, success, event_type
         ORDER BY date DESC
       `
@@ -59,15 +65,18 @@ export const authStatsService = {
 			// Calculate unique IPs and countries across all records
 			const allIPs = data.flatMap((stat) => stat.unique_ips)
 			const allCountries = data.flatMap((stat) => stat.countries)
+			const allDevices = data.flatMap((stat) => stat.device_types || [])
 			const uniqueIPs = new Set(allIPs).size
 			const uniqueCountries = new Set(allCountries).size
+			const uniqueDevices = new Set(allDevices).size
 
 			logger.info(`Auth stats retrieved successfully for user: ${userId}`, {
 				recordCount: data.length,
 				totalSuccess,
 				totalFailure,
 				uniqueIPs,
-				uniqueCountries
+				uniqueCountries,
+				uniqueDevices
 			})
 
 			return {
@@ -77,7 +86,8 @@ export const authStatsService = {
 					totalSuccess,
 					totalFailure,
 					uniqueIPs,
-					uniqueCountries
+					uniqueCountries,
+					uniqueDevices
 				}
 			}
 		} catch (error) {
@@ -136,13 +146,18 @@ export const authStatsService = {
 			// Calculate unique IPs and countries
 			const allIPs = data.flatMap((stat) => stat.unique_ips)
 			const allCountries = data.flatMap((stat) => stat.countries)
+			const allDevices = data.flatMap((stat) => stat.device_types || [])
 			const uniqueIPs = new Set(allIPs).size
 			const uniqueCountries = new Set(allCountries).size
+			const uniqueDevices = new Set(allDevices).size
 
 			logger.info(`Recent auth events retrieved successfully for user: ${userId}`, {
 				recordCount: data.length,
 				successCount,
-				failureCount
+				failureCount,
+				uniqueIPs,
+				uniqueCountries,
+				uniqueDevices
 			})
 
 			return {
@@ -152,7 +167,8 @@ export const authStatsService = {
 					totalSuccess: successCount,
 					totalFailure: failureCount,
 					uniqueIPs,
-					uniqueCountries
+					uniqueCountries,
+					uniqueDevices
 				}
 			}
 		} catch (error) {

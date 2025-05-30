@@ -1,4 +1,5 @@
 import { mysqlPool } from '../db/mysql'
+import type mysql from 'mysql2/promise'
 import { generateTokens } from '../services/authService'
 import { createUser } from '../services/userService'
 import { getApiKey, regenerateApiKey } from '../services/apiKeyService'
@@ -17,15 +18,15 @@ interface TestUser {
   }
 }
 
-async function createTestUser(email: string = 'test@example.com'): Promise<TestUser> {
+async function createTestUser(email = 'test@example.com'): Promise<TestUser> {
   const connection = await mysqlPool.getConnection()
   
   try {
     // Check if user already exists
-    const [existingUsers] = await connection.query(
+    const [existingUsers] = await connection.query<mysql.RowDataPacket[]>(
       'SELECT * FROM users WHERE email = ?',
       [email]
-    ) as any[]
+    )
 
     let userId: number
     let apiKey: string
@@ -36,7 +37,7 @@ async function createTestUser(email: string = 'test@example.com'): Promise<TestU
       apiKey = existingUsers[0].api_key || await regenerateApiKey(userId)
     } else {
       // Create new user
-      const [result] = await connection.query(
+      const [result] = await connection.query<mysql.ResultSetHeader>(
         `INSERT INTO users (
           email,
           full_name,
@@ -57,7 +58,7 @@ async function createTestUser(email: string = 'test@example.com'): Promise<TestU
           'monthly',
           29.99
         ]
-      ) as any[]
+      )
 
       userId = result.insertId
       apiKey = await regenerateApiKey(userId)
