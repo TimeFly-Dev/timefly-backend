@@ -32,7 +32,7 @@
         "lint": "biome lint",
         "prepare": "husky",
         "init-db": "bun run src/scripts/init-clickhouse.ts && bun run src/scripts/init-mysql.ts",
-        "generate-massive-data": "bun run src/scripts/generate-massive-sample-data.ts"
+        "create-test-user": "bun run src/scripts/create-test-user.ts"
     },
     "dependencies": {
         "@clickhouse/client": "1.11.1",
