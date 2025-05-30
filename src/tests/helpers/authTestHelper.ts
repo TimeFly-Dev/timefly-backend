@@ -59,7 +59,7 @@ export function createTestApp(): Hono {
   const app = new Hono()
 
   // Mock Google OAuth middleware
-  app.use('/auth/google/callback', async (c, next) => {
+  app.use('/auth/google/callback', async (c, _next) => {
     // Set mock Google user data
     c.set('user-google', mockGoogleUser)
     
@@ -107,7 +107,7 @@ export function createTestApp(): Hono {
     try {
       await verify(refreshToken, CONFIG.JWT_REFRESH_SECRET)
       return c.json({ success: true })
-    } catch (error) {
+    } catch (_error) {
       return c.json({
         success: false,
         error: 'Invalid refresh token'
