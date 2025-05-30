@@ -4,6 +4,7 @@ import { authEventService } from './authEventService'
 import { parseUserAgent } from '../utils/deviceDetection'
 import type { CreateSessionInput } from '../types/sessions'
 import type { ClientInfo } from '../types/auth'
+import type { Context } from 'hono'
 import { 
   generateAccessToken, 
   generateRefreshToken, 
@@ -59,24 +60,14 @@ export async function generateTokens(
   await sessionService.createSession(sessionData)
 
   // Log successful authentication
-  authEventService.logEvent({
-    timestamp: new Date(),
-    user_id: dbUser.id,
-    email: dbUser.email,
-    success: true,
-    ip_address: clientInfo.ipAddress,
-    user_agent: clientInfo.userAgent,
-    country_code: 'UN',
-    city: 'Unknown',
-    provider: 'google',
-    event_type: 'created',
-    device_info: {
-      device_name: userAgent.deviceName,
-      device_type: userAgent.deviceType,
-      browser: userAgent.browser,
-      os: userAgent.os
-    }
-  })
+  await authEventService.logSessionEventWithoutContext(
+    dbUser.id,
+    dbUser.email,
+    'created',
+    clientInfo.ipAddress,
+    clientInfo.userAgent,
+    tokenId
+  )
 
   return { accessToken, refreshToken, tokenId }
 }

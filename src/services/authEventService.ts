@@ -2,6 +2,9 @@ import { clickhouseClient } from '../db/clickhouse'
 import { CONFIG } from '../config'
 import { logger } from '../utils/logger'
 import type { AuthEventInput, AuthDailyStat, AuthStatsResponse } from '../types/authEvents'
+import { parseUserAgent } from '../utils/deviceDetection'
+import type { Context } from 'hono'
+import { getClientIp } from '../utils/getClientIp'
 
 /**
  * Service for logging authentication events to ClickHouse
@@ -9,6 +12,103 @@ import type { AuthEventInput, AuthDailyStat, AuthStatsResponse } from '../types/
 class AuthEventService {
 	private queue: readonly AuthEventInput[] = []
 	private isProcessing = false
+
+	/**
+	 * Creates a base event with common information from the context
+	 */
+	private createBaseEvent(c: Context, userId: number, email: string): Omit<AuthEventInput, 'success' | 'provider' | 'event_type'> {
+		const userAgent = c.req.header('user-agent') || ''
+		const parsedUserAgent = parseUserAgent(userAgent)
+
+		return {
+			timestamp: new Date(),
+			user_id: userId,
+			email,
+			ip_address: getClientIp(c),
+			user_agent: userAgent,
+			country_code: 'UN', // TODO: Implement geo-ip service
+			city: 'Unknown', // TODO: Implement geo-ip service
+			device_info: {
+				device_name: parsedUserAgent.deviceName,
+				device_type: parsedUserAgent.deviceType,
+				browser: parsedUserAgent.browser,
+				os: parsedUserAgent.os
+			}
+		}
+	}
+
+	/**
+	 * Logs a successful authentication event
+	 */
+	async logSuccess(c: Context, userId: number, email: string, provider: 'google' | 'github' | 'local', eventType?: 'created' | 'refreshed' | 'expired' | 'revoked'): Promise<void> {
+		const baseEvent = this.createBaseEvent(c, userId, email)
+		await this.logEvent({
+			...baseEvent,
+			success: true,
+			provider,
+			event_type: eventType
+		})
+	}
+
+	/**
+	 * Logs a failed authentication event
+	 */
+	async logFailure(c: Context, userId: number, email: string, provider: 'google' | 'github' | 'local', errorMessage: string): Promise<void> {
+		const baseEvent = this.createBaseEvent(c, userId, email)
+		await this.logEvent({
+			...baseEvent,
+			success: false,
+			provider,
+			error_message: errorMessage
+		})
+	}
+
+	/**
+	 * Logs a session event
+	 */
+	async logSessionEvent(c: Context, userId: number, email: string, eventType: 'created' | 'refreshed' | 'expired' | 'revoked', sessionId?: string): Promise<void> {
+		const baseEvent = this.createBaseEvent(c, userId, email)
+		await this.logEvent({
+			...baseEvent,
+			success: true,
+			provider: 'local',
+			event_type: eventType,
+			session_id: sessionId
+		})
+	}
+
+	/**
+	 * Logs a session event without a full context
+	 */
+	async logSessionEventWithoutContext(
+		userId: number,
+		email: string,
+		eventType: 'created' | 'refreshed' | 'expired' | 'revoked',
+		ipAddress: string,
+		userAgent: string,
+		sessionId?: string
+	): Promise<void> {
+		const parsedUserAgent = parseUserAgent(userAgent)
+		await this.logEvent({
+			timestamp: new Date(),
+			user_id: userId,
+			email,
+			success: true,
+			provider: 'local',
+			event_type: eventType,
+			session_id: sessionId,
+			ip_address: ipAddress,
+			user_agent: userAgent,
+			country_code: 'UN',
+			city: 'Unknown',
+			device_info: {
+				device_name: parsedUserAgent.deviceName,
+				device_type: parsedUserAgent.deviceType,
+				browser: parsedUserAgent.browser,
+				os: parsedUserAgent.os
+			}
+		})
+	}
 
 	/**
 	 * Logs an authentication event

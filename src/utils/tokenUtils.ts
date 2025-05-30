@@ -2,6 +2,18 @@ import { sign, verify } from 'hono/jwt'
 import { CONFIG } from '../config'
 import { logger } from './logger'
 import { randomUUID } from 'node:crypto'
+import type { Context } from 'hono'
+
+/**
+ * Checks if the requested user ID matches the authenticated user's ID
+ * @param {Context} c - Hono context
+ * @param {number} requestedUserId - The user ID being requested
+ * @returns {boolean} True if authorized, false otherwise
+ */
+export const isAuthorized = (c: Context, requestedUserId: number): boolean => {
+  const authenticatedUserId = c.get('userId')
+  return authenticatedUserId === requestedUserId
+}
 
 /**
  * Generates a new access token

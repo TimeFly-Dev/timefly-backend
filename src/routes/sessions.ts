@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { describeRoute } from 'hono-openapi'
+import { resolver } from 'hono-openapi/zod'
 import { cookieAuthMiddleware } from '../middleware/cookieAuthMiddleware'
 import { sessionService } from '../services/sessionService'
 import { authEventService } from '../services/authEventService'
@@ -8,13 +9,19 @@ import { logger } from '../utils/logger'
 import { getCookie } from 'hono/cookie'
 import type { AuthStatsResponse } from '../types/authEvents'
 import { getClientIp } from '../utils/getClientIp'
+import { parseUserAgent } from '../utils/deviceDetection'
+import { sessionResponseSchema, sessionStatsQuerySchema, sessionRevocationResponseSchema } from '../validations/sessionsValidations'
+import { getUserById } from '../services/userService'
 
 const sessions = new Hono()
 
 // Apply cookie authentication middleware to all routes
 sessions.use('*', cookieAuthMiddleware)
 
-// Get all active sessions for the current user
+/**
+ * Get all active sessions for the current user
+ * @route GET /sessions
+ */
 sessions.get(
 	'/',
 	describeRoute({
@@ -23,10 +30,41 @@ sessions.get(
 		security: [{ bearerAuth: [] }],
 		responses: {
 			200: {
-				description: 'Sessions retrieved successfully'
+				description: 'Sessions retrieved successfully',
+				content: {
+					'application/json': {
+						schema: resolver(sessionResponseSchema),
+						example: {
+							success: true,
+							data: {
+								sessions: [
+									{
+										id: 'abc123',
+										device_name: 'Chrome on Windows',
+										device_type: 'desktop',
+										browser: 'Chrome',
+										os: 'Windows',
+										ip_address: '127.0.0.1',
+										last_active: '2024-03-20T12:00:00Z',
+										created_at: '2024-03-19T12:00:00Z'
+									}
+								],
+								currentSession: 'abc123'
+							}
+						}
+					}
+				}
 			},
 			401: {
-				description: 'Unauthorized'
+				description: 'Unauthorized',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Authentication required'
+						}
+					}
+				}
 			}
 		}
 	}),
@@ -68,7 +106,10 @@ sessions.get(
 	}
 )
 
-// Revoke a specific session
+/**
+ * Revoke a specific session
+ * @route DELETE /sessions/:sessionId
+ */
 sessions.delete(
 	'/:sessionId',
 	describeRoute({
@@ -86,13 +127,49 @@ sessions.delete(
 		],
 		responses: {
 			200: {
-				description: 'Session revoked successfully'
+				description: 'Session revoked successfully',
+				content: {
+					'application/json': {
+						schema: resolver(sessionRevocationResponseSchema),
+						example: {
+							success: true,
+							message: 'Session revoked successfully'
+						}
+					}
+				}
+			},
+			400: {
+				description: 'Bad request',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Cannot revoke the current session'
+						}
+					}
+				}
 			},
 			401: {
-				description: 'Unauthorized'
+				description: 'Unauthorized',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Authentication required'
+						}
+					}
+				}
 			},
 			404: {
-				description: 'Session not found'
+				description: 'Session not found',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Session not found or not owned by you'
+						}
+					}
+				}
 			}
 		}
 	}),
@@ -131,20 +208,11 @@ sessions.delete(
 				)
 			}
 
+			// Get user email for logging
+			const userData = await getUserById(userId)
+			
 			// Log the session revocation event
-			authEventService.logEvent({
-				timestamp: new Date(),
-				user_id: userId,
-				email: '', // We don't have this information here
-				success: true,
-				ip_address: getClientIp(c),
-				user_agent: c.req.header('user-agent') || '',
-				country_code: 'UN',
-				city: 'Unknown',
-				provider: 'local',
-				session_id: sessionId,
-				event_type: 'revoked'
-			})
+			await authEventService.logSessionEvent(c, userId, userData?.email || '', 'revoked', sessionId)
 
 			logger.info(`Session revoked successfully: ${sessionId}`)
 			return c.json({
@@ -164,7 +232,10 @@ sessions.delete(
 	}
 )
 
-// Revoke all other sessions
+/**
+ * Revoke all other sessions
+ * @route DELETE /sessions
+ */
 sessions.delete(
 	'/',
 	describeRoute({
@@ -173,10 +244,41 @@ sessions.delete(
 		security: [{ bearerAuth: [] }],
 		responses: {
 			200: {
-				description: 'Sessions revoked successfully'
+				description: 'Sessions revoked successfully',
+				content: {
+					'application/json': {
+						schema: resolver(sessionRevocationResponseSchema),
+						example: {
+							success: true,
+							data: {
+								revokedCount: 2
+							},
+							message: '2 sessions revoked successfully'
+						}
+					}
+				}
+			},
+			400: {
+				description: 'Bad request',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'No active session found'
+						}
+					}
+				}
 			},
 			401: {
-				description: 'Unauthorized'
+				description: 'Unauthorized',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Authentication required'
+						}
+					}
+				}
 			}
 		}
 	}),
@@ -212,20 +314,11 @@ sessions.delete(
 
 			const revokedCount = await sessionService.revokeAllOtherSessions(userId, currentSession.id)
 
+			// Get user email for logging
+			const userData = await getUserById(userId)
+
 			// Log the session revocation events
-			authEventService.logEvent({
-				timestamp: new Date(),
-				user_id: userId,
-				email: '', // We don't have this information here
-				success: true,
-				ip_address: getClientIp(c),
-				user_agent: c.req.header('user-agent') || '',
-				country_code: 'UN',
-				city: 'Unknown',
-				provider: 'local',
-				session_id: 'bulk-revocation',
-				event_type: 'revoked'
-			})
+			await authEventService.logSessionEvent(c, userId, userData?.email || '', 'revoked', 'bulk-revocation')
 
 			logger.info(`${revokedCount} sessions revoked for user: ${userId}`)
 			return c.json({
@@ -248,7 +341,10 @@ sessions.delete(
 	}
 )
 
-// Get session statistics
+/**
+ * Get session statistics
+ * @route GET /sessions/stats
+ */
 sessions.get(
 	'/stats',
 	describeRoute({
@@ -260,21 +356,57 @@ sessions.get(
 				name: 'startDate',
 				in: 'query',
 				schema: { type: 'string', format: 'date' },
-				description: 'Start date for statistics (YYYY-MM-DD)'
+				description: 'Start date for statistics (YYYY-MM-DD). Defaults to 30 days ago if not specified.'
 			},
 			{
 				name: 'endDate',
 				in: 'query',
 				schema: { type: 'string', format: 'date' },
-				description: 'End date for statistics (YYYY-MM-DD)'
+				description: 'End date for statistics (YYYY-MM-DD). Defaults to current date if not specified.'
 			}
 		],
 		responses: {
 			200: {
-				description: 'Session statistics retrieved successfully'
+				description: 'Session statistics retrieved successfully',
+				content: {
+					'application/json': {
+						schema: resolver(sessionResponseSchema),
+						example: {
+							success: true,
+							data: {
+								stats: [
+									{
+										date: '2024-03-20',
+										event_type: 'login',
+										event_count: 5
+									}
+								]
+							}
+						}
+					}
+				}
+			},
+			400: {
+				description: 'Bad request - Invalid date format',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Invalid date format. Use YYYY-MM-DD'
+						}
+					}
+				}
 			},
 			401: {
-				description: 'Unauthorized'
+				description: 'Unauthorized',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Authentication required'
+						}
+					}
+				}
 			}
 		}
 	}),
@@ -282,9 +414,25 @@ sessions.get(
 		const userId = c.get('userId')
 		logger.info(`Session statistics requested for user: ${userId}`)
 
-		// Get query parameters
+		// Get and validate query parameters
 		const startDateParam = c.req.query('startDate')
 		const endDateParam = c.req.query('endDate')
+
+		const queryResult = sessionStatsQuerySchema.safeParse({
+			startDate: startDateParam,
+			endDate: endDateParam
+		})
+
+		if (!queryResult.success) {
+			logger.warn(`Invalid query parameters for user: ${userId}`, queryResult.error)
+			return c.json(
+				{
+					success: false,
+					error: 'Invalid date format. Use YYYY-MM-DD'
+				},
+				400
+			)
+		}
 
 		// Default to last 30 days if not specified
 		const endDate = endDateParam ? new Date(endDateParam) : new Date()
@@ -306,7 +454,10 @@ sessions.get(
 	}
 )
 
-// Get recent session events
+/**
+ * Get recent session events
+ * @route GET /sessions/recent
+ */
 sessions.get(
 	'/recent',
 	describeRoute({
@@ -318,15 +469,51 @@ sessions.get(
 				name: 'limit',
 				in: 'query',
 				schema: { type: 'integer', minimum: 1, maximum: 100 },
-				description: 'Maximum number of events to return'
+				description: 'Maximum number of events to return. Defaults to 10 if not specified.'
 			}
 		],
 		responses: {
 			200: {
-				description: 'Recent session events retrieved successfully'
+				description: 'Recent session events retrieved successfully',
+				content: {
+					'application/json': {
+						schema: resolver(sessionResponseSchema),
+						example: {
+							success: true,
+							data: {
+								stats: [
+									{
+										date: '2024-03-20',
+										event_type: 'login',
+										event_count: 1
+									}
+								]
+							}
+						}
+					}
+				}
+			},
+			400: {
+				description: 'Bad request - Invalid limit parameter',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Invalid limit parameter. Must be between 1 and 100'
+						}
+					}
+				}
 			},
 			401: {
-				description: 'Unauthorized'
+				description: 'Unauthorized',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Authentication required'
+						}
+					}
+				}
 			}
 		}
 	}),
@@ -334,9 +521,24 @@ sessions.get(
 		const userId = c.get('userId')
 		logger.info(`Recent session events requested for user: ${userId}`)
 
-		// Get limit parameter
+		// Get and validate limit parameter
 		const limitParam = c.req.query('limit')
-		const limit = limitParam ? Number.parseInt(limitParam, 10) : 10
+		const queryResult = sessionStatsQuerySchema.safeParse({
+			limit: limitParam ? Number.parseInt(limitParam, 10) : undefined
+		})
+
+		if (!queryResult.success) {
+			logger.warn(`Invalid limit parameter for user: ${userId}`, queryResult.error)
+			return c.json(
+				{
+					success: false,
+					error: 'Invalid limit parameter. Must be between 1 and 100'
+				},
+				400
+			)
+		}
+
+		const limit = queryResult.data.limit ?? 10
 
 		try {
 			const events: AuthStatsResponse = await authEventService.getRecentEvents(userId, limit)
