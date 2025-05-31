@@ -1,5 +1,5 @@
 import { clickhouseClient } from '../db/clickhouse'
-import type { codingTime, codingTimeOptions, Pulse, PulsesOptions } from '../types/stats'
+import type { codingTime, codingTimeOptions, Pulse, PulsesOptions, DashboardTimelineItem } from '../types/stats'
 import { formatDuration } from '../utils/timeFormatters'
 
 export async function getTop3(props: {
@@ -15,7 +15,7 @@ export async function getTop3(props: {
 	lastProject?: string
 }>> {
 	const { userId, timeRange = 'all', entity, startDate, endDate } = props
-
+	console.log('getTop3 !!! ->', props)
 	// Determine which field to group by based on the entity
 	let groupByField: string
 	let whereCondition = ''
