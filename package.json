@@ -37,22 +37,22 @@
     "dependencies": {
         "@clickhouse/client": "1.11.1",
         "@hono/oauth-providers": "0.8.0",
-        "@hono/zod-validator": "0.6.0",
+        "@hono/zod-validator": "0.7.0",
         "@scalar/hono-api-reference": "0.9.1",
-        "hono": "4.7.10",
+        "hono": "4.7.11",
         "hono-openapi": "0.4.8",
         "mysql2": "3.14.1",
         "resend": "4.5.1",
         "stripe": "18.2.0",
         "uuid": "11.1.0",
-        "zod": "3.25.30",
+        "zod": "3.25.46",
         "zod-openapi": "4.2.4"
     },
     "devDependencies": {
         "@biomejs/biome": "1.9.4",
         "@commitlint/cli": "19.8.1",
         "@commitlint/config-conventional": "19.8.1",
-        "@types/bun": "1.2.14",
+        "@types/bun": "1.2.15",
         "cross-env": "7.0.3",
         "husky": "9.1.7"
     }
