@@ -96,11 +96,39 @@ async function initClickhouse() {
           sync_duration_ms UInt32,
           success Bool,
           error_message String DEFAULT '',
+          request_id String,
+          timezone String,
+          user_agent String,
+          ip_address String,
           created_at DateTime DEFAULT now()
         )
         ENGINE = MergeTree()
         PARTITION BY toYYYYMM(timestamp)
         ORDER BY (user_id, timestamp)
+      `
+		})
+
+		// Add materialized view for sync statistics
+		await clickhouseClient.exec({
+			query: `
+        CREATE MATERIALIZED VIEW IF NOT EXISTS sync_stats
+        ENGINE = SummingMergeTree()
+        PARTITION BY toYYYYMM(date)
+        ORDER BY (user_id, date)
+        AS SELECT
+          user_id,
+          toDate(timestamp) as date,
+          count() as total_syncs,
+          sum(pulses_count) as total_pulses,
+          sum(aggregated_pulses_count) as total_aggregated_pulses,
+          avg(sync_duration_ms) as avg_sync_duration,
+          sum(if(success, 1, 0)) as successful_syncs,
+          sum(if(not success, 1, 0)) as failed_syncs,
+          arrayDistinct(groupArray(timezone)) as timezones,
+          arrayDistinct(groupArray(user_agent)) as user_agents,
+          arrayDistinct(groupArray(ip_address)) as ip_addresses
+        FROM sync_events
+        GROUP BY user_id, date
       `
 		})
 
@@ -209,11 +237,15 @@ async function initClickhouse() {
           id UUID DEFAULT generateUUIDv4(),
           user_id UInt32,
           timestamp DateTime64(3),
-          event_type Enum('created' = 1, 'regenerated' = 2),
+          event_type Enum('created' = 1, 'regenerated' = 2, 'revoked' = 3, 'last_used' = 4),
           ip_address String,
           user_agent String,
           country_code LowCardinality(String) DEFAULT '',
           city LowCardinality(String) DEFAULT '',
+          device_name String DEFAULT '',
+          device_type String DEFAULT '',
+          browser String DEFAULT '',
+          os String DEFAULT '',
           created_at DateTime DEFAULT now()
         )
         ENGINE = MergeTree()
@@ -233,7 +265,13 @@ async function initClickhouse() {
           user_id,
           toDate(timestamp) as date,
           event_type,
-          count() as event_count
+          count() as event_count,
+          arrayDistinct(groupArray(ip_address)) as unique_ips,
+          arrayDistinct(groupArray(user_agent)) as unique_user_agents,
+          arrayDistinct(groupArray(country_code)) as countries,
+          arrayDistinct(groupArray(device_type)) as device_types,
+          arrayDistinct(groupArray(browser)) as browsers,
+          arrayDistinct(groupArray(os)) as operating_systems
         FROM api_key_events
         GROUP BY user_id, date, event_type
       `

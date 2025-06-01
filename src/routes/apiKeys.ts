@@ -6,13 +6,10 @@ import { cookieAuthMiddleware } from '../middleware/cookieAuthMiddleware'
 import { createApiKey, getApiKey, regenerateApiKey } from '../services/apiKeyService'
 import { apiKeyResponseSchema } from '../validations/apiKeyValidations'
 import { logger } from '../utils/logger'
+import { getClientIp } from '../utils/getClientIp'
 
 const apiKeys = new Hono()
 
-// Helper function to get client IP
-const getClientIp = (c: Context): string => {
-	return c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || c.req.header('cf-connecting-ip') || 'unknown'
-}
 // Apply cookie authentication middleware to all routes
 apiKeys.use('*', cookieAuthMiddleware)
 
@@ -20,20 +17,45 @@ apiKeys.use('*', cookieAuthMiddleware)
 apiKeys.get(
 	'/',
 	describeRoute({
-		description: 'Get current API key for authenticated user',
+		description: 'Get current API key for authenticated user. If no API key exists, a new one will be created automatically.',
 		tags: ['API Keys'],
 		security: [{ bearerAuth: [] }],
 		responses: {
 			200: {
-				description: 'API key retrieved successfully',
+				description: 'API key retrieved or created successfully',
 				content: {
 					'application/json': {
-						schema: resolver(apiKeyResponseSchema)
+						schema: resolver(apiKeyResponseSchema),
+						example: {
+							success: true,
+							data: {
+								apiKey: 'sk_live_1234567890abcdef'
+							}
+						}
 					}
 				}
 			},
 			401: {
-				description: 'Unauthorized'
+				description: 'Unauthorized - User not authenticated',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Unauthorized'
+						}
+					}
+				}
+			},
+			500: {
+				description: 'Internal server error',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Failed to retrieve API key'
+						}
+					}
+				}
 			}
 		}
 	}),
@@ -41,42 +63,53 @@ apiKeys.get(
 		const userId = c.get('userId')
 		logger.info(`API key requested for user: ${userId}`)
 
-		const apiKey = await getApiKey(userId)
+		try {
+			const apiKey = await getApiKey(userId)
 
-		if (!apiKey) {
-			logger.info(`No API key found for user: ${userId}, creating new one`)
+			if (!apiKey) {
+				logger.info(`No API key found for user: ${userId}, creating new one`)
 
-			// Create a new API key if none exists
-			const eventInfo = {
-				ip_address: getClientIp(c),
-				user_agent: c.req.header('user-agent') || ''
+				// Create a new API key if none exists
+				const eventInfo = {
+					ip_address: getClientIp(c),
+					user_agent: c.req.header('user-agent') || ''
+				}
+
+				const newApiKey = await createApiKey(userId, eventInfo)
+
+				return c.json({
+					success: true,
+					data: {
+						apiKey: newApiKey
+					}
+				})
 			}
 
-			const newApiKey = await createApiKey(userId, eventInfo)
-
+			logger.debug(`Returning existing API key for user: ${userId}`)
 			return c.json({
 				success: true,
 				data: {
-					apiKey: newApiKey
+					apiKey
 				}
 			})
+		} catch (error) {
+			logger.error(`Error retrieving API key for user: ${userId}`, error)
+			return c.json(
+				{
+					success: false,
+					error: 'Failed to retrieve API key'
+				},
+				500
+			)
 		}
-
-		logger.debug(`Returning existing API key for user: ${userId}`)
-		return c.json({
-			success: true,
-			data: {
-				apiKey
-			}
-		})
 	}
 )
 
-// Regenerate API key (changed from POST to PUT)
+// Regenerate API key
 apiKeys.put(
 	'/',
 	describeRoute({
-		description: 'Regenerate API key for authenticated user',
+		description: 'Regenerate API key for authenticated user. This will invalidate the current API key and create a new one.',
 		tags: ['API Keys'],
 		security: [{ bearerAuth: [] }],
 		responses: {
@@ -84,12 +117,37 @@ apiKeys.put(
 				description: 'API key regenerated successfully',
 				content: {
 					'application/json': {
-						schema: resolver(apiKeyResponseSchema)
+						schema: resolver(apiKeyResponseSchema),
+						example: {
+							success: true,
+							data: {
+								apiKey: 'sk_live_1234567890abcdef'
+							}
+						}
 					}
 				}
 			},
 			401: {
-				description: 'Unauthorized'
+				description: 'Unauthorized - User not authenticated',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Unauthorized'
+						}
+					}
+				}
+			},
+			500: {
+				description: 'Internal server error',
+				content: {
+					'application/json': {
+						example: {
+							success: false,
+							error: 'Failed to regenerate API key'
+						}
+					}
+				}
 			}
 		}
 	}),

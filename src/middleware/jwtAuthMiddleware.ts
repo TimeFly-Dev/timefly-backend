@@ -4,6 +4,7 @@ import { CONFIG } from '../config'
 import { getUserById } from '../services/userService'
 import type { UserContext } from '../types/auth'
 import { logger } from '../utils/logger'
+import { isAuthorized } from '../utils/tokenUtils'
 
 /**
  * Middleware to authenticate requests using JWT Bearer tokens
@@ -37,6 +38,19 @@ export const jwtAuthMiddleware = async (c: Context, next: Next) => {
 			avatarUrl: user.avatarUrl
 		}
 		c.set('user', userContext)
+
+		// Check if the requested user ID matches the authenticated user's ID
+		const requestedUserId = c.req.param('id')
+		if (requestedUserId && !isAuthorized(c, Number(requestedUserId))) {
+			logger.warn(`Unauthorized access attempt: User ${userId} tried to access data for user ${requestedUserId}`)
+			return c.json(
+				{
+					success: false,
+					error: 'Unauthorized access'
+				},
+				403
+			)
+		}
 
 		logger.debug(`JWT authentication successful for user: ${userId}`)
 		await next()

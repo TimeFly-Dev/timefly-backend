@@ -15,6 +15,11 @@ async function initMysql() {
           api_key VARCHAR(64) UNIQUE,
           api_key_created_at TIMESTAMP NULL,
           api_key_last_used_at TIMESTAMP NULL,
+          api_key_last_used_ip VARCHAR(45) NULL,
+          api_key_last_used_user_agent VARCHAR(255) NULL,
+          api_key_usage_count INT DEFAULT 0,
+          api_key_revoked_at TIMESTAMP NULL,
+          api_key_revoked_reason VARCHAR(255) NULL,
           stripe_customer_id VARCHAR(255) UNIQUE NULL,
           subscription_status VARCHAR(50) DEFAULT 'inactive',
           subscription_id VARCHAR(255) UNIQUE NULL,
@@ -27,7 +32,12 @@ async function initMysql() {
           billing_cycle VARCHAR(20) NULL,
           mrr DECIMAL(10,2) DEFAULT 0.00,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_api_key (api_key),
+          INDEX idx_api_key_last_used (api_key_last_used_at),
+          INDEX idx_api_key_revoked (api_key_revoked_at),
+          INDEX idx_api_key_created (api_key_created_at),
+          INDEX idx_api_key_status (api_key, api_key_revoked_at)
         )
     `)
 
@@ -67,27 +77,27 @@ async function initMysql() {
 		await connection.query(`
       CREATE TABLE IF NOT EXISTS widgets (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        uuid VARCHAR(45) UNIQUE,
         name VARCHAR(100) NOT NULL UNIQUE,
-        query VARCHAR(255),
+        query VARCHAR(255) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `)
 
-		// Create user_widgets table to store widget instances
+		// Create users_has_widgets table to store widget instances for users
 		await connection.query(`
-      CREATE TABLE IF NOT EXISTS user_widgets (
+      CREATE TABLE IF NOT EXISTS users_has_widgets (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
         widget_id INT NOT NULL,
-        uuid VARCHAR(45),
-        skin VARCHAR(50) DEFAULT 'outline',
-        time_range VARCHAR(50) DEFAULT 'week',
+        props JSON NULL DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        position INT NOT NULL DEFAULT '0',
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (widget_id) REFERENCES widgets(id) ON DELETE CASCADE
+        FOREIGN KEY (widget_id) REFERENCES widgets(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_widget_id_per_user (user_id, widget_id),
+        INDEX idx_users_widgets_position (user_id, position)
       )
     `)
 
@@ -201,16 +211,16 @@ async function initMysql() {
 
 		// Insert default widget types (updated to match actual structure)
 		await connection.query(`
-      INSERT IGNORE INTO widgets (uuid, name, query) VALUES 
-      ('09e97548-341a-11f0-8053-da26b5a95d6d', 'ClockWidget', NULL),
-      ('09e97b2a-341a-11f0-8053-da26b5a95d6d', 'TotalTime', 'getTotalTime'),
-      ('09e97c1d-341a-11f0-8053-da26b5a95d6d', 'TotalTime1x2', 'getTotalTime'),
-      ('09e97e0f-341a-11f0-8053-da26b5a95d6d', 'TodaysActivity1x2', 'getTodaysActivity'),
-      ('09e980c0-341a-11f0-8053-da26b5a95d6d', 'MostActiveWeekday', 'getMostActiveWeekday'),
-      ('09e9815a-341a-11f0-8053-da26b5a95d6d', 'Top3BarsChart', 'getTop3'),
-      ('09e99a49-341a-11f0-8053-da26b5a95d6d', 'GoalProgressBar1x2', 'getGoalProgress'),
-      ('09e99ac0-341a-11f0-8053-da26b5a95d6d', 'MaxFocusStreak', 'getMaxFocusStreak'),
-      ('09e99b2a-341a-11f0-8053-da26b5a95d6d', 'GoalMosaic1x2', 'getGoalMosaic')
+      INSERT IGNORE INTO widgets (name, query) VALUES 
+      ('ClockWidget', NULL),
+      ('TotalTime', 'getCodingTime'),
+      ('TotalTime1x2', 'getCodingTime'),
+      ('TodaysActivity1x2', 'getPulseStates'),
+      ('MostActiveWeekday', 'getMostActiveWeekday'),
+      ('Top3BarsChart', 'getTop3'),
+      ('GoalProgressBar1x2', 'getGoalProgress'),
+      ('MaxFocusStreak', 'getMaxFocusStreak'),
+      ('GoalMosaic1x2', 'getGoalMosaic')
     `)
 
 		console.log('MySQL tables created successfully')
@@ -220,7 +230,8 @@ async function initMysql() {
 		console.log('✅ Stripe invoices table created')
 		console.log('✅ Stripe events table created')
 		console.log('✅ Stripe payment methods table created')
-		console.log('✅ Widget data updated with actual UUIDs')
+		console.log('✅ Widget data updated')
+		console.log('✅ users_has_widgets table created')
 		
 		connection.release()
 	} catch (error) {

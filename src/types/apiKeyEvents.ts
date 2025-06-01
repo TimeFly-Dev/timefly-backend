@@ -23,13 +23,17 @@ export interface ApiKeyEventLog {
  * Input for logging an API key event
  */
 export interface ApiKeyEventInput {
-	readonly user_id: number
-	readonly timestamp: Date
-	readonly event_type: 'created' | 'regenerated'
-	readonly ip_address: string
-	readonly user_agent: string
-	readonly country_code?: string
-	readonly city?: string
+	user_id: number
+	timestamp: Date
+	event_type: 'created' | 'regenerated' | 'revoked' | 'last_used'
+	ip_address: string
+	user_agent: string
+	country_code?: string
+	city?: string
+	device_name?: string
+	device_type?: string
+	browser?: string
+	os?: string
 }
 
 /**

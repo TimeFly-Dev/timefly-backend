@@ -165,6 +165,114 @@ export const sessionService = {
 	},
 
 	/**
+	 * Finds an existing session for a user based on device information
+	 * @param {number} userId - The user ID
+	 * @param {string} browser - The browser name
+	 * @param {string} os - The operating system
+	 * @param {string} deviceType - The device type
+	 * @param {string} ipAddress - The IP address
+	 * @returns {Promise<UserSession | null>} The session if found, null otherwise
+	 */
+	findExistingSession: async (
+		userId: number,
+		browser: string,
+		os: string,
+		deviceType: string,
+		ipAddress: string
+	): Promise<UserSession | null> => {
+		const connection = await mysqlPool.getConnection()
+
+		try {
+			logger.debug(`Looking for existing session for user: ${userId} with browser: ${browser}, OS: ${os}, device: ${deviceType}`)
+
+			// First try to find a session with exact device match
+			const [rows] = await connection.execute<mysql.RowDataPacket[]>(
+				`SELECT * FROM user_sessions 
+				WHERE user_id = ? 
+				AND browser = ? 
+				AND os = ? 
+				AND device_type = ? 
+				AND ip_address = ? 
+				AND is_revoked = FALSE 
+				AND expires_at > NOW() 
+				ORDER BY last_active DESC 
+				LIMIT 1`,
+				[userId, browser, os, deviceType, ipAddress]
+			)
+
+			if (rows.length > 0) {
+				const session = rows[0] as UserSession
+				logger.debug(`Found existing session with exact match: ${session.id}`)
+				return session
+			}
+
+			// If no exact match, try to find a session with similar device characteristics
+			// This is useful for cases where browser version or OS version might have changed slightly
+			const [similarRows] = await connection.execute<mysql.RowDataPacket[]>(
+				`SELECT * FROM user_sessions 
+				WHERE user_id = ? 
+				AND browser LIKE ? 
+				AND os LIKE ? 
+				AND device_type = ? 
+				AND is_revoked = FALSE 
+				AND expires_at > NOW() 
+				ORDER BY last_active DESC 
+				LIMIT 1`,
+				[userId, `${browser.split(' ')[0]}%`, `${os.split(' ')[0]}%`, deviceType]
+			)
+
+			if (similarRows.length > 0) {
+				const session = similarRows[0] as UserSession
+				logger.debug(`Found existing session with similar device: ${session.id}`)
+				return session
+			}
+
+			logger.debug(`No existing session found for user: ${userId} with this device`)
+			return null
+		} catch (error) {
+			logger.error(`Failed to find existing session for user ${userId}:`, error)
+			throw error
+		} finally {
+			connection.release()
+		}
+	},
+
+	/**
+	 * Updates an existing session with a new refresh token
+	 * @param {string} sessionId - The session ID to update
+	 * @param {string} refreshToken - The new refresh token
+	 * @param {Date} expiresAt - The new expiration date
+	 * @returns {Promise<boolean>} True if the session was updated
+	 */
+	updateSessionToken: async (sessionId: string, refreshToken: string, expiresAt: Date): Promise<boolean> => {
+		const connection = await mysqlPool.getConnection()
+
+		try {
+			logger.debug(`Updating session token for session: ${sessionId}`)
+
+			const [result] = await connection.execute<mysql.ResultSetHeader>(
+				'UPDATE user_sessions SET refresh_token = ?, expires_at = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?',
+				[refreshToken, expiresAt, sessionId]
+			)
+
+			const wasUpdated = result.affectedRows > 0
+
+			if (wasUpdated) {
+				logger.info(`Session ${sessionId} token updated successfully`)
+			} else {
+				logger.warn(`Failed to update token for session ${sessionId}: Session not found`)
+			}
+
+			return wasUpdated
+		} catch (error) {
+			logger.error(`Failed to update session token for ${sessionId}:`, error)
+			throw error
+		} finally {
+			connection.release()
+		}
+	},
+
+	/**
 	 * Revokes a session
 	 * @param {string} sessionId - The session ID
 	 * @param {string} userId - The user ID (for authorization check)

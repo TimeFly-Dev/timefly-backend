@@ -55,16 +55,16 @@ const executeWidgetQueries = async (userId: string, queries: WidgetQuery[]) => {
           const formattedEndDate = formatDateForClickHouse(new Date());
           
           // Extract props properly - handle nested props structure
-          const widgetProps = typeof query.props === 'object' && query.props 
+          const widgetProps: { timeRange?: string } = typeof query.props === 'object' && query.props 
             ? (query.props.props || query.props) 
             : {};
           
           // Set time range based on props or default
           const timeRange = widgetProps.timeRange || 'month';
           
-          // Determine aggregation based on timeRange for getTotalTime
+          // Determine aggregation based on timeRange for getCodingTime
           let _aggregation = 'daily';
-          if (functionName === 'getTotalTime') {
+          if (functionName === 'getCodingTime') {
             switch(timeRange) {
               case 'day': _aggregation = 'daily'; break;
               case 'week': _aggregation = 'weekly'; break;
@@ -91,12 +91,11 @@ const executeWidgetQueries = async (userId: string, queries: WidgetQuery[]) => {
             params.timeRange = 'month'
           }
           
-          // For getTotalTime, set aggregation if not provided
-          if (functionName === 'getTotalTime' && !params.aggregation) {
+          // For getCodingTime, set aggregation if not provided
+          if (functionName === 'getCodingTime' && !params.aggregation) {
             params.aggregation = 'daily'
           }
           
-          console.log(`Executing ${functionName} with params:`, params);
           const data = await statsFunction(params)
           return { id: query.id, data: data }
         }
@@ -115,7 +114,7 @@ const executeWidgetQueries = async (userId: string, queries: WidgetQuery[]) => {
 }
 
 // Helper function to fetch widget data by ID
-const fetchWidgetById = async (widgetId: string): Promise<WidgetData> => {
+const fetchWidgetById = async (widgetId: number): Promise<WidgetData> => {
   const [widgets] = await mysqlPool.execute<WidgetData[]>(
     `
     SELECT 
@@ -209,10 +208,9 @@ export const getUserWidgets = async (userId: string): Promise<Record<string, unk
       props: row.props,
       created: row.created
     }))
-  
+  console.log('QUERIES TO EXECUTE: ', queriesToExecute)
   const widgetData = await executeWidgetQueries(userId, queriesToExecute)
 
-  console.log("WIDGET DATA:",widgetData)
   return rows.map(row => ({
     ...formatWidgetResponse(row),
     widgetData: widgetData[row.id] || {}
@@ -222,6 +220,11 @@ export const getUserWidgets = async (userId: string): Promise<Record<string, unk
 // Insert a user_has_widgets record
 export const postUserWidget = async (body: Record<string, unknown>): Promise<Record<string, unknown>> => {
   const { userId, widgetId, props } = body
+  const widgetIdNumber = typeof widgetId === 'string' ? Number.parseInt(widgetId, 10) : Number(widgetId)
+  
+  if (Number.isNaN(widgetIdNumber)) {
+    throw new Error('Invalid widget ID format')
+  }
 
   try {
     // Insert the user-widget relationship
@@ -235,11 +238,11 @@ export const postUserWidget = async (body: Record<string, unknown>): Promise<Rec
         ?
       )
       `,
-      [userId, widgetId, JSON.stringify(props)]
+      [userId, widgetIdNumber, JSON.stringify(props)]
     )
 
     // Fetch and return the created widget
-    const widget = await fetchWidgetById(widgetId)
+    const widget = await fetchWidgetById(widgetIdNumber)
     return formatWidgetResponse(widget)
   } catch (error) {
     if (error instanceof Error && error.message.includes('a foreign key constraint fails')) {

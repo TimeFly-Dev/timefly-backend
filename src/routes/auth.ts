@@ -94,19 +94,13 @@ auth.get(
 				logger.error('Invalid Google user data:', googleUser)
 
 				// Log failed authentication attempt
-				authEventService.logEvent({
-					timestamp: new Date(),
-					user_id: 0, // 0 for unknown user
-					email: googleUser?.email || 'unknown',
-					success: false,
-					ip_address: getClientIp(c),
-					user_agent: c.req.header('user-agent') || '',
-					country_code: 'UN', // You might want to use a geo-ip service to get this
-					city: 'Unknown',
-					provider: 'google',
-					error_message: 'Invalid authentication data',
-					device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
-				})
+				await authEventService.logFailure(
+					c,
+					0, // 0 for unknown user
+					googleUser?.email || 'unknown',
+					'google',
+					'Invalid authentication data'
+				)
 
 				// Redirect to frontend with error
 				return c.redirect(`${CONFIG.FRONTEND_URL}/auth?error=invalid_user_data`)
@@ -136,35 +130,23 @@ auth.get(
 				await getApiKey(dbUser.id)
 
 				// Log successful authentication
-				authEventService.logEvent({
-					timestamp: new Date(),
-					user_id: dbUser.id,
-					email: dbUser.email,
-					success: true,
-					ip_address: getClientIp(c),
-					user_agent: c.req.header('user-agent') || '',
-					country_code: 'UN',
-					city: 'Unknown',
-					provider: 'google',
-					device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
-				})
+				await authEventService.logSuccess(
+					c,
+					dbUser.id,
+					dbUser.email,
+					'google'
+				)
 			} catch (dbError) {
 				logger.error('Database operation failed:', dbError)
 
 				// Log failed authentication due to database error
-				authEventService.logEvent({
-					timestamp: new Date(),
-					user_id: 0,
-					email: googleUser.email,
-					success: false,
-					ip_address: getClientIp(c),
-					user_agent: c.req.header('user-agent') || '',
-					country_code: 'UN',
-					city: 'Unknown',
-					provider: 'google',
-					error_message: 'Database operation failed',
-					device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
-				})
+				await authEventService.logFailure(
+					c,
+					0,
+					googleUser.email,
+					'google',
+					'Database operation failed'
+				)
 
 				// Redirect to frontend with error
 				return c.redirect(`${CONFIG.FRONTEND_URL}/auth?error=database_error`)
@@ -201,19 +183,13 @@ auth.get(
 			logger.error('Authentication error:', error)
 
 			// Log failed authentication due to unexpected error
-			authEventService.logEvent({
-				timestamp: new Date(),
-				user_id: 0,
-				email: 'unknown',
-				success: false,
-				ip_address: getClientIp(c),
-				user_agent: c.req.header('user-agent') || '',
-				country_code: 'UN',
-				city: 'Unknown',
-				provider: 'google',
-				error_message: 'Authentication failed',
-				device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
-			})
+			await authEventService.logFailure(
+				c,
+				0,
+				'unknown',
+				'google',
+				'Authentication failed'
+			)
 
 			// Redirect to frontend with error
 			return c.redirect(`${CONFIG.FRONTEND_URL}/auth?error=authentication_failed`)
@@ -285,18 +261,13 @@ auth.post(
 			// User info is no longer stored in cookies
 
 			// Log successful token refresh
-			authEventService.logEvent({
-				timestamp: new Date(),
-				user_id: userId,
-				email: userData.email,
-				success: true,
-				ip_address: getClientIp(c),
-				user_agent: c.req.header('user-agent') || '',
-				country_code: 'UN',
-				city: 'Unknown',
-				provider: 'local',
-				device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
-			})
+			await authEventService.logSuccess(
+				c,
+				userId,
+				userData.email,
+				'local',
+				'refreshed'
+			)
 
 			logger.info(`Token refresh successful for user: ${userId}`)
 			return c.json({
@@ -309,19 +280,13 @@ auth.post(
 			logger.error('Token refresh error:', error)
 
 			// Log failed token refresh
-			authEventService.logEvent({
-				timestamp: new Date(),
-				user_id: 0,
-				email: 'unknown',
-				success: false,
-				ip_address: getClientIp(c),
-				user_agent: c.req.header('user-agent') || '',
-				country_code: 'UN',
-				city: 'Unknown',
-				provider: 'local',
-				error_message: 'Invalid refresh token',
-				device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
-			})
+			await authEventService.logFailure(
+				c,
+				0,
+				'unknown',
+				'local',
+				'Invalid refresh token'
+			)
 
 			return c.json(
 				{
@@ -372,18 +337,12 @@ auth.post(
 
     // Log logout event if we have a user ID
     if (userId > 0) {
-      authEventService.logEvent({
-        timestamp: new Date(),
-        user_id: userId,
-        email: email,
-        success: true,
-        ip_address: getClientIp(c),
-        user_agent: c.req.header('user-agent') || '',
-        country_code: 'UN',
-        city: 'Unknown',
-        provider: 'local',
-        device_info: (() => { const ua = parseUserAgent(c.req.header('user-agent') || ''); return { device_name: ua.deviceName, device_type: ua.deviceType, browser: ua.browser, os: ua.os }; })()
-      })
+      await authEventService.logSuccess(
+        c,
+        userId,
+        email,
+        'local'
+      )
     }
 
     // Remove cookies by setting maxAge to 0
