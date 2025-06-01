@@ -224,15 +224,6 @@ async function initMysql() {
     `)
 
 		console.log('MySQL tables created successfully')
-		console.log('✅ Users table updated with Stripe fields')
-		console.log('✅ Stripe subscriptions table created')
-		console.log('✅ Stripe subscription items table created')
-		console.log('✅ Stripe invoices table created')
-		console.log('✅ Stripe events table created')
-		console.log('✅ Stripe payment methods table created')
-		console.log('✅ Widget data updated')
-		console.log('✅ users_has_widgets table created')
-		
 		connection.release()
 	} catch (error) {
 		console.error('Error creating MySQL tables:', error)

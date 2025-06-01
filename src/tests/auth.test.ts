@@ -110,8 +110,8 @@ describe('Authentication Tests', () => {
     expect(userId).toBe(testUser.user.id)
   })
 
-  test('should handle expired access token', async () => {
-    // Create an expired token by modifying the test app
+  test('should reject expired access token', async () => {
+    // Create a token that expired 1 hour ago
     const expiredToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImlhdCI6MTUxNjIzOTAyMiwiZXhwIjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'
     
     const response = await app.request('/auth/me', {
@@ -124,10 +124,10 @@ describe('Authentication Tests', () => {
     expect(response.status).toBe(401)
     const data = await response.json() as ApiResponse<null>
     expect(data.success).toBe(false)
-    expect(data.error).toBeDefined()
+    expect(data.error).toContain('Authentication required')
   })
 
-  test('should handle invalid access token', async () => {
+  test('should reject invalid access token', async () => {
     const response = await app.request('/auth/me', {
       headers: {
         'Cookie': 'access_token=invalid-token',
@@ -141,7 +141,7 @@ describe('Authentication Tests', () => {
     expect(data.error).toBeDefined()
   })
 
-  test('should handle missing refresh token', async () => {
+  test('should reject missing refresh token', async () => {
     const response = await app.request('/auth/refresh-token', {
       method: 'POST',
       headers: {
@@ -153,6 +153,34 @@ describe('Authentication Tests', () => {
     expect(response.status).toBe(401)
     const data = await response.json() as ApiResponse<null>
     expect(data.success).toBe(false)
+    expect(data.error).toContain('Refresh token not found')
+  })
+
+  test('should reject invalid refresh token', async () => {
+    const response = await app.request('/auth/refresh-token', {
+      method: 'POST',
+      headers: {
+        'Cookie': 'refresh_token=invalid-refresh-token',
+        'User-Agent': 'Test Browser'
+      }
+    })
+    
+    expect(response.status).toBe(401)
+    const data = await response.json() as ApiResponse<null>
+    expect(data.success).toBe(false)
     expect(data.error).toBeDefined()
   })
-}) 
+
+  test('should reject missing access token', async () => {
+    const response = await app.request('/auth/me', {
+      headers: {
+        'User-Agent': 'Test Browser'
+      }
+    })
+    
+    expect(response.status).toBe(401)
+    const data = await response.json() as ApiResponse<null>
+    expect(data.success).toBe(false)
+    expect(data.error).toBeDefined()
+  })
+})
