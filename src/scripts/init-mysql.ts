@@ -217,7 +217,7 @@ async function initMysql() {
       ('TotalTime1x2', 'getCodingTime'),
       ('TodaysActivity1x2', 'getPulseStates'),
       ('MostActiveWeekday', 'getMostActiveWeekday'),
-      ('Top3BarsChart', 'getTop3'),
+      ('Top3BarsChart', 'getTopItems'),
       ('GoalProgressBar1x2', 'getGoalProgress'),
       ('MaxFocusStreak', 'getMaxFocusStreak'),
       ('GoalMosaic1x2', 'getGoalMosaic')

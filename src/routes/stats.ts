@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
-import { getCodingTime, getTop3, getPulses } from '../services/statsService'
+import { getCodingTime, getTopItems, getPulses } from '../services/statsService'
 import { cookieAuthMiddleware } from '../middleware/cookieAuthMiddleware'
 import {
 	codingTimeSchema,
@@ -78,7 +78,7 @@ stats.get(
 		const { startDate, endDate, period } = c.req.valid('query')
 
 		try {
-			const topLanguages = await getTop3({
+			const topLanguages = await getTopItems({
 				userId,
 				startDate,
 				endDate,
