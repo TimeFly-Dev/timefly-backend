@@ -1,76 +1,65 @@
 import { clickhouseClient } from '../db/clickhouse'
-import type { codingTime, codingTimeOptions, Pulse, PulsesOptions, DashboardTimelineItem } from '../types/stats'
+import type { codingTime, codingTimeOptions, Pulse, PulsesOptions, DashboardTimelineItem, Entity, TimeRange, RawResult, TopItem, TopItemsProps, TopItemsResponse } from '../types/stats'
 import { formatDuration } from '../utils/timeFormatters'
 
-export async function getTop3(props: {
-	userId: number
-	timeRange?: 'day' | 'week' | 'month' | 'year' | 'all'
-	entity: 'languages' | 'ides' | 'projects' | 'machines'
-	startDate?: string
-	endDate?: string
-}): Promise<Array<{
-	name: string
-	hours: string
-	lastUsed: string
-	lastProject?: string
-}>> {
-	const { userId, timeRange = 'all', entity, startDate, endDate } = props
-	console.log('getTop3 !!! ->', props)
-	// Determine which field to group by based on the entity
-	let groupByField: string
-	let whereCondition = ''
+// Get entity configuration (field name and condition)
+const getEntityConfig = (entity: Entity): { field: string; condition: string } => {
+	const config: Record<Entity, { field: string; condition: string }> = {
+		languages: { field: 'language', condition: "AND language != ''" },
+		ides: { field: 'entity', condition: "AND entity != ''" },
+		projects: { field: 'project', condition: "AND project != ''" },
+		machines: { field: 'machine_name_id', condition: "AND machine_name_id != ''" }
+	};
 
-	switch (entity) {
-		case 'languages':
-			groupByField = 'language'
-			whereCondition = "AND language != ''"
-			break
-		case 'ides':
-			// 'entity' column will be used for IDEs when it's added
-			groupByField = 'entity'
-			whereCondition = "AND entity != ''"
-			break
-		case 'projects':
-			groupByField = 'project'
-			whereCondition = "AND project != ''"
-			break
-		case 'machines':
-			groupByField = 'machine_name_id'
-			whereCondition = "AND machine_name_id != ''"
-			break
-		default:
-			throw new Error(`Invalid entity: ${entity}`)
+	if (!config[entity]) {
+		throw new Error(`Invalid entity: ${entity}`);
 	}
 
-	let whereClause = `WHERE user_id = ${userId} ${whereCondition}`
+	return config[entity];
+};
 
-	// apply date filters: custom range overrides period
+// Build date filter clause based on timeRange or custom date range
+const buildDateFilterClause = (timeRange: TimeRange, startDate?: string, endDate?: string): string => {
+	// If custom date range is provided, use it
 	if (startDate || endDate) {
+		let clause = '';
 		if (startDate) {
-			whereClause += ` AND start_time >= toDateTime(${startDate})`
+			clause += ` AND start_time >= toDateTime('${startDate}')`;
 		}
 		if (endDate) {
-			whereClause += ` AND end_time <= toDateTime(${endDate})`
+			clause += ` AND end_time <= toDateTime('${endDate}')`;
 		}
-	} else {
-		switch (timeRange) {
-			case 'day':
-				whereClause += ' AND start_time >= today() AND start_time < addDays(today(), 1)'
-				break
-			case 'week':
-				whereClause += ' AND start_time >= toStartOfWeek(now()) AND start_time < addDays(toStartOfWeek(now()), 7)'
-				break
-			case 'month':
-				whereClause += ' AND start_time >= toStartOfMonth(now()) AND start_time < addMonths(toStartOfMonth(now()), 1)'
-				break
-			case 'year':
-				whereClause += ' AND start_time >= toStartOfYear(now()) AND start_time < addYears(toStartOfYear(now()), 1)'
-				break
-		}
+		return clause;
 	}
 
-	// Query the aggregated_pulses table directly
-	const query = `
+	// Otherwise use timeRange
+	const timeRangeFilters: Record<TimeRange, string> = {
+		// Rolling window filters
+		day: " AND start_time >= now() - INTERVAL 1 DAY",
+		week: " AND start_time >= now() - INTERVAL 7 DAY",
+		month: " AND start_time >= now() - INTERVAL 30 DAY",
+		year: " AND start_time >= now() - INTERVAL 365 DAY",
+		all: '' // No filter for 'all'
+	};
+
+	return timeRangeFilters[timeRange] || '';
+};
+
+// Build the complete SQL query
+const buildTopItemsQuery = (
+	userId: number,
+	entity: Entity,
+	timeRange: TimeRange,
+	startDate?: string,
+	endDate?: string,
+	limit = 5
+): string => {
+	const { field: groupByField, condition: whereCondition } = getEntityConfig(entity);
+	const baseWhereClause = `WHERE user_id = ${userId} ${whereCondition}`;
+	const dateFilter = buildDateFilterClause(timeRange, startDate, endDate);
+	const whereClause = `${baseWhereClause}${dateFilter}`;
+
+	return `
     SELECT 
       ${groupByField} as name,
       SUM(dateDiff('second', start_time, end_time)) as total_seconds,
@@ -80,30 +69,52 @@ export async function getTop3(props: {
       ${whereClause}
       GROUP BY ${groupByField}
       ORDER BY total_seconds DESC
-    LIMIT 3
-  `
+    LIMIT ${limit}
+  `;
+};
 
-	const result = await clickhouseClient.query({
-		query,
-		format: 'JSONEachRow'
-	})
-
-	interface RawResult {
-		name: string
-		total_seconds: string | number
-		last_used: string
-		last_project?: string
-	}
-
-	const data = (await result.json()) as RawResult[]
-
+// Transform raw query results into formatted items
+const transformTopItems = (data: RawResult[], entity: Entity): TopItem[] => {
 	return data.map((row) => ({
 		name: row.name,
-		hours: formatDuration(Number(row.total_seconds) / 3600),
+		time: Number(row.total_seconds),
+		formattedTime: formatDuration(Number(row.total_seconds) / 3600),
 		lastUsed: new Date(row.last_used).toISOString(),
 		// Only include lastProject if it's not the same as the entity name (for projects)
 		...(entity === 'projects' ? {} : { lastProject: row.last_project })
-	}))
+	}));
+};
+
+// Main function to get top items
+export async function getTopItems(props: TopItemsProps): Promise<TopItemsResponse> {
+	// Extract and default parameters
+	const { 
+		userId, 
+		timeRange = 'day', 
+		entity = 'projects', 
+		startDate, 
+		endDate, 
+		limit = 5 
+	} = props;
+
+	// Build query
+	const query = buildTopItemsQuery(userId, entity, timeRange, startDate, endDate, limit);
+	
+	// Execute query
+	const result = await clickhouseClient.query({
+		query,
+		format: 'JSONEachRow'
+	});
+
+	// Process results
+	const data = (await result.json()) as RawResult[];
+	const items = transformTopItems(data, entity);
+
+	// Return formatted response
+	return {
+		timeRange,
+		[entity]: items
+	};
 }
 
 export async function getPulses({

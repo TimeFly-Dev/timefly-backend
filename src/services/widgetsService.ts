@@ -27,90 +27,116 @@ interface WidgetQuery {
   [key: string]: unknown; // Para cualquier otra propiedad que pueda existir
 }
 
-// Execute widget queries will import functions from statsService resolving their names by widget_query
-const executeWidgetQueries = async (userId: string, queries: WidgetQuery[]) => {
-  console.log("QUERIES TO EXECUTE:", queries)
+// Utility functions for date handling and parameter preparation
 
-  // Execute each function dynamically from statsService based on the widget_query name
+// Format a date for ClickHouse (YYYY-MM-DD HH:MM:SS)
+const formatDateForClickHouse = (date: Date): string => 
+  date.toISOString().replace('T', ' ').substring(0, 19);
+
+// Get default date range (30 days)
+const _getDefaultDateRange = (): { startDate: string, endDate: string } => {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  
+  return {
+    startDate: formatDateForClickHouse(thirtyDaysAgo),
+    endDate: formatDateForClickHouse(new Date())
+  };
+};
+
+// Extract widget properties from query
+const extractWidgetProps = (query: WidgetQuery): Record<string, unknown> => {
+  if (typeof query.props !== 'object' || !query.props) {
+    return {};
+  }
+  
+  return (query.props.props as Record<string, unknown>) || 
+         (query.props as Record<string, unknown>);
+};
+
+// Map timeRange to aggregation for getCodingTime
+const mapTimeRangeToAggregation = (timeRange: string): string => {
+  const aggregationMap: Record<string, string> = {
+    'day': 'daily',
+    'week': 'weekly',
+    'month': 'monthly',
+    'year': 'yearly'
+  };
+  
+  return aggregationMap[timeRange] || 'daily';
+};
+
+// Prepare parameters for stats service functions
+const prepareStatsParams = (userId: string, query: WidgetQuery): Record<string, unknown> => {
+  const widgetProps = extractWidgetProps(query);
+  const timeRange = widgetProps.timeRange as string || 'month';
+  const functionName = query.widget_query.trim();
+  
+  // Base parameters without default dates - let statsService handle timeRange filtering
+  const params: Record<string, unknown> = {
+    userId: Number(userId),
+    entity: widgetProps.entity || 'projects',
+    limit: widgetProps.limit || 5,
+    timeRange
+  };
+  
+  // Only add date range if explicitly provided in widget props
+  if (widgetProps.startDate) {
+    params.startDate = widgetProps.startDate;
+  }
+  
+  if (widgetProps.endDate) {
+    params.endDate = widgetProps.endDate;
+  }
+  
+  // Add widget-specific properties
+  if (Object.keys(widgetProps).length > 0) {
+    Object.assign(params, widgetProps);
+  }
+  
+  // Add function-specific parameters
+  if (functionName === 'getCodingTime' && !params.aggregation) {
+    params.aggregation = mapTimeRangeToAggregation(timeRange);
+  }
+  
+  return params;
+};
+
+// Execute a single widget query
+const executeWidgetQuery = async (userId: string, query: WidgetQuery): Promise<{ id: number | string, data: unknown, error?: string }> => {
+  try {
+    const functionName = query.widget_query.trim() as keyof typeof statsService;
+    
+    if (typeof statsService[functionName] !== 'function') {
+      return { 
+        id: query.id, 
+        data: [], 
+        error: `Function ${String(functionName)} not found` 
+      };
+    }
+    
+    // Prepare parameters and execute the function
+    type StatsFunctionType = (params: Record<string, unknown>) => Promise<unknown>;
+    const statsFunction = statsService[functionName] as StatsFunctionType;
+    const params = prepareStatsParams(userId, query);
+    const data = await statsFunction(params);
+    
+    return { id: query.id, data };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { id: query.id, data: [], error: errorMessage };
+  }
+};
+
+// Execute widget queries by dynamically importing functions from statsService
+const executeWidgetQueries = async (userId: string, queries: WidgetQuery[]): Promise<Record<string | number, unknown>> => {
+  // Execute all queries in parallel
   const results = await Promise.all(
-    queries.map(async (query) => {
-      try {
-        const functionName = query.widget_query.trim() as keyof typeof statsService
-        
-        if (typeof statsService[functionName] === 'function') {
-          // Definir un tipo más específico para la función
-          type StatsFunctionType = (params: Record<string, unknown>) => Promise<unknown>
-          const statsFunction = statsService[functionName] as StatsFunctionType
-          
-          // Create a 30-day lookback window as default
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          
-          // Format dates for ClickHouse (YYYY-MM-DD HH:MM:SS)
-          const formatDateForClickHouse = (date: Date) => {
-            return date.toISOString().replace('T', ' ').substring(0, 19);
-          };
-          
-          const formattedStartDate = formatDateForClickHouse(thirtyDaysAgo);
-          const formattedEndDate = formatDateForClickHouse(new Date());
-          
-          // Extract props properly - handle nested props structure
-          const widgetProps: { timeRange?: string } = typeof query.props === 'object' && query.props 
-            ? (query.props.props || query.props) 
-            : {};
-          
-          // Set time range based on props or default
-          const timeRange = widgetProps.timeRange || 'month';
-          
-          // Determine aggregation based on timeRange for getCodingTime
-          let _aggregation = 'daily';
-          if (functionName === 'getCodingTime') {
-            switch(timeRange) {
-              case 'day': _aggregation = 'daily'; break;
-              case 'week': _aggregation = 'weekly'; break;
-              case 'month': _aggregation = 'monthly'; break;
-              case 'year': _aggregation = 'yearly'; break;
-              default: _aggregation = 'daily';
-            }
-          }
-          
-          // Ensure dates are properly formatted for ClickHouse
-          const params: Record<string, unknown> = {
-            userId: Number(userId) || 4, // Default userId if not provided
-            startDate: formattedStartDate, // Last 30 days
-            endDate: formattedEndDate
-          }
-          
-          // Add any props from the widget
-          if (widgetProps) {
-            Object.assign(params, widgetProps)
-          }
-          
-          // Set default timeRange if not provided
-          if (!params.timeRange) {
-            params.timeRange = 'month'
-          }
-          
-          // For getCodingTime, set aggregation if not provided
-          if (functionName === 'getCodingTime' && !params.aggregation) {
-            params.aggregation = 'daily'
-          }
-          
-          const data = await statsFunction(params)
-          return { id: query.id, data: data }
-        }
-        
-        console.error(`Function ${String(functionName)} not found in statsService`)
-        return { id: query.id, data: [], error: `Function ${String(functionName)} not found` }
-      } catch (error: unknown) {
-        console.error(`Error executing widget query for ${query.id}:`, error)
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        return { id: query.id, data: [], error: errorMessage }
-      }
-    })
-  )
+    queries.map(query => executeWidgetQuery(userId, query))
+  );
 
-  return Object.fromEntries(results.map(result => [result.id, result.data]))
+  // Transform results into a map of id -> data
+  return Object.fromEntries(results.map(result => [result.id, result.data]));
 }
 
 // Helper function to fetch widget data by ID
@@ -202,7 +228,7 @@ export const getUserWidgets = async (userId: string): Promise<Record<string, unk
     .filter(row => row.widget_query && row.widget_query.trim() !== '')
     .map((row) => ({
       id: row.id,
-      widget_id: row.widget_id,
+      widget_id: Number(row.widget_id),
       widget_name: row.widget_name,
       widget_query: row.widget_query,
       props: row.props,

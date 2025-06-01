@@ -72,3 +72,36 @@ export interface DashboardResponse {
 	computed: Record<string, number>
 	timeline: DashboardTimelineItem[]
 }
+
+export interface TopItemsProps {
+	userId: number;
+	timeRange?: TimeRange;
+	entity?: Entity;
+	startDate?: string;
+	endDate?: string;
+	limit?: number;
+	[key: string]: unknown;
+}
+
+export interface RawResult {
+	name: string;
+	total_seconds: string | number;
+	last_used: string;
+	last_project?: string;
+}
+
+export interface TopItem {
+	name: string;
+	time: number;
+	formattedTime: string;
+	lastUsed: string;
+	lastProject?: string;
+}
+
+export interface TopItemsResponse {
+	timeRange: string;
+	[key: string]: unknown;
+}
+
+export type Entity = 'languages' | 'ides' | 'projects' | 'machines';
+export type TimeRange = 'day' | 'week' | 'month' | 'year' | 'all';
