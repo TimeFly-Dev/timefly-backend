@@ -45,7 +45,7 @@
         "resend": "4.5.1",
         "stripe": "18.2.0",
         "uuid": "11.1.0",
-        "zod": "3.25.46",
+        "zod": "3.25.48",
         "zod-openapi": "4.2.4"
     },
     "devDependencies": {
