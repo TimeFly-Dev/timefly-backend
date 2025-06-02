@@ -31,7 +31,10 @@
         "test:coverage": "NODE_ENV=test bun test --coverage",
         "lint": "biome lint",
         "prepare": "husky",
-        "init-db": "bun run src/scripts/init-clickhouse.ts && bun run src/scripts/init-mysql.ts",
+        "migrate:mysql": "DBMATE_DATABASE_URL=$MYSQL_DATABASE_URL npx dbmate up --migrations-dir db/migrations",
+        "migrate:clickhouse": "DBMATE_DATABASE_URL=$CLICKHOUSE_DATABASE_URL npx dbmate up --migrations-dir db/migrations",
+        "rollback:mysql": "DBMATE_DATABASE_URL=$MYSQL_DATABASE_URL npx dbmate rollback --migrations-dir db/migrations",
+        "rollback:clickhouse": "DBMATE_DATABASE_URL=$CLICKHOUSE_DATABASE_URL npx dbmate rollback --migrations-dir db/migrations",
         "create-test-user": "bun run src/scripts/create-test-user.ts"
     },
     "dependencies": {
@@ -54,6 +57,7 @@
         "@commitlint/config-conventional": "19.8.1",
         "@types/bun": "1.2.15",
         "cross-env": "7.0.3",
+        "dbmate": "2.27.0",
         "husky": "9.1.7"
     }
 }
