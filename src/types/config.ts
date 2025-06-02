@@ -43,7 +43,6 @@ export interface MySQLConfig {
  */
 export interface ClickHouseConfig {
 	readonly CLICKHOUSE_HOST: string
-	readonly CLICKHOUSE_PORT: number
 	readonly CLICKHOUSE_USER: string
 	readonly CLICKHOUSE_PASSWORD: string
 }

@@ -29,7 +29,6 @@ const ENV_VARS: EnvVarDefinitions = {
 
 	// ClickHouse configuration
 	CLICKHOUSE_HOST: { type: 'string', required: true },
-	CLICKHOUSE_PORT: { type: 'number', required: true },
 	CLICKHOUSE_USER: { type: 'string', required: true },
 	CLICKHOUSE_PASSWORD: { type: 'string', required: true },
 
@@ -108,7 +107,6 @@ const verifyConfigProperties = (config: Record<string, unknown>): void => {
 		'MYSQL_PASSWORD',
 		'MYSQL_DATABASE',
 		'CLICKHOUSE_HOST',
-		'CLICKHOUSE_PORT',
 		'CLICKHOUSE_USER',
 		'CLICKHOUSE_PASSWORD',
 		'RESEND_API_KEY',
