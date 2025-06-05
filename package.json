@@ -31,10 +31,10 @@
         "test:coverage": "NODE_ENV=test bun test --coverage",
         "lint": "biome lint",
         "prepare": "husky",
-        "migrate:mysql": "DBMATE_DATABASE_URL=$MYSQL_DATABASE_URL npx dbmate up --migrations-dir db/migrations",
-        "migrate:clickhouse": "DBMATE_DATABASE_URL=$CLICKHOUSE_DATABASE_URL npx dbmate up --migrations-dir db/migrations",
-        "rollback:mysql": "DBMATE_DATABASE_URL=$MYSQL_DATABASE_URL npx dbmate rollback --migrations-dir db/migrations",
-        "rollback:clickhouse": "DBMATE_DATABASE_URL=$CLICKHOUSE_DATABASE_URL npx dbmate rollback --migrations-dir db/migrations",
+        "migrate:mysql": "DBMATE_DATABASE_URL=$MYSQL_DATABASE_URL bunx dbmate up --migrations-dir db/migrations",
+        "migrate:clickhouse": "DBMATE_DATABASE_URL=$CLICKHOUSE_DATABASE_URL bunx dbmate up --migrations-dir db/migrations",
+        "rollback:mysql": "DBMATE_DATABASE_URL=$MYSQL_DATABASE_URL bunx dbmate rollback --migrations-dir db/migrations",
+        "rollback:clickhouse": "DBMATE_DATABASE_URL=$CLICKHOUSE_DATABASE_URL bunx dbmate rollback --migrations-dir db/migrations",
         "create-test-user": "bun run src/scripts/create-test-user.ts"
     },
     "dependencies": {
