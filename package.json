@@ -38,17 +38,17 @@
         "create-test-user": "bun run src/scripts/create-test-user.ts"
     },
     "dependencies": {
-        "@clickhouse/client": "1.11.1",
-        "@hono/oauth-providers": "0.8.0",
+        "@clickhouse/client": "1.11.2",
+        "@hono/oauth-providers": "0.8.1",
         "@hono/zod-validator": "0.7.0",
-        "@scalar/hono-api-reference": "0.9.1",
+        "@scalar/hono-api-reference": "0.9.3",
         "hono": "4.7.11",
         "hono-openapi": "0.4.8",
         "mysql2": "3.14.1",
-        "resend": "4.5.1",
-        "stripe": "18.2.0",
+        "resend": "4.5.2",
+        "stripe": "18.2.1",
         "uuid": "11.1.0",
-        "zod": "3.25.48",
+        "zod": "3.25.56",
         "zod-openapi": "4.2.4"
     },
     "devDependencies": {
