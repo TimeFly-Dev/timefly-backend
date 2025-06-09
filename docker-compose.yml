@@ -8,8 +8,6 @@ services:
       - "8123:8123"
       - "9000:9000"
     environment:
-      - CLICKHOUSE_UID=101
-      - CLICKHOUSE_GID=101
       - CLICKHOUSE_USER=${CLICKHOUSE_USER}
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
 
