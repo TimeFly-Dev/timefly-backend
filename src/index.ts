@@ -56,7 +56,6 @@ app.route('/dashboard', dashboard)
 
 app.route('/payments', stripeRoutes)
 
-
 // OpenAPI documentation
 app.get(
 	'/openapi',

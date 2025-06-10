@@ -108,9 +108,9 @@ async function main() {
     console.log('\nExample Usage:')
     console.log('------------------------------')
     console.log('1. API Key Authentication:')
-    console.log(`   curl -H "X-API-Key: ${testUser.apiKey}" http://localhost:3000/api/protected-route`)
+    console.log(`   curl -H "X-API-Key: ${testUser.apiKey}" http://${CONFIG.BASE_URL}/api/protected-route`)
     console.log('\n2. Cookie Authentication:')
-    console.log(`   curl -H "Cookie: access_token=${testUser.tokens.accessToken}; refresh_token=${testUser.tokens.refreshToken}" http://localhost:3000/auth/me`)
+    console.log(`   curl -H "Cookie: access_token=${testUser.tokens.accessToken}; refresh_token=${testUser.tokens.refreshToken}" http://${CONFIG.BASE_URL}/auth/me`)
   } catch (error) {
     console.error('Error creating test user:', error)
     process.exit(1)
