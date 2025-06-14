@@ -1,6 +1,6 @@
 -- migrate:up
 INSERT IGNORE INTO widgets (name, query, default_props) VALUES 
-('ClockWidget', NULL, '{"skin": "outline", "timeRange": "week"}'),
+('ClockWidget', NULL, '{"skin": "outline"}'),
 ('TotalTime', 'getCodingTime', '{"skin": "outline", "timeRange": "week"}'),
 ('TotalTime1x2', 'getCodingTime', '{"skin": "outline", "timeRange": "week"}'),
 ('TodaysActivity1x2', 'getPulseStates', '{"skin": "outline", "timeRange": "week"}'),
