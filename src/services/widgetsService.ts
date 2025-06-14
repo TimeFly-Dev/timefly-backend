@@ -183,13 +183,13 @@ const formatWidgetResponse = (widget: WidgetData) => ({
 export interface Widget extends RowDataPacket {
   id: string
   name: string
-  query: string
+  default_props: string
 }
 
 // Get all widgets
 export const getWidgets = async (): Promise<Widget[]> => {
   const [rows] = await mysqlPool.execute<RowDataPacket[]>(
-    'SELECT id, name, query FROM timefly.widgets'
+    'SELECT id, name, default_props FROM timefly.widgets'
   )
   return (Array.isArray(rows) ? rows : []) as Widget[]
 }
