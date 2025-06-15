@@ -140,7 +140,7 @@ const executeWidgetQueries = async (userId: string, queries: WidgetQuery[]): Pro
 }
 
 // Helper function to fetch widget data by ID
-const fetchWidgetById = async (widgetId: number): Promise<WidgetData> => {
+const fetchWidgetById = async (widgetId: number, userId?: string): Promise<WidgetData & { widgetData?: unknown }> => {
   const [widgets] = await mysqlPool.execute<WidgetData[]>(
     `
     SELECT 
@@ -149,7 +149,8 @@ const fetchWidgetById = async (widgetId: number): Promise<WidgetData> => {
       w.name as widget_name,
       w.query as widget_query,
       uhw.props as props,
-      uhw.created_at as created
+      uhw.created_at as created,
+      uhw.user_id as user_id
     FROM 
       timefly.users_has_widgets uhw
     JOIN 
@@ -164,11 +165,34 @@ const fetchWidgetById = async (widgetId: number): Promise<WidgetData> => {
     throw new Error('User widget not found')
   }
 
-  return widgets[0]
+  const widget = widgets[0];
+  
+  // If userId is provided, execute the widget query to get widget data
+  if (userId && widget.widget_query && widget.widget_query.trim() !== '') {
+    // Reuse queriesToExecute logic with a single item
+    const queriesToExecute = [{
+      id: widget.id,
+      widget_id: Number(widget.widget_id),
+      widget_name: widget.widget_name,
+      widget_query: widget.widget_query,
+      props: widget.props,
+      created: widget.created
+    }];
+    
+    console.log('QUERIES TO EXECUTE:', queriesToExecute); 
+    const widgetData = await executeWidgetQueries(userId, queriesToExecute);
+    
+    return {
+      ...widget,
+      widgetData: widgetData[widget.id]
+    };
+  }
+  
+  return widget;
 }
 
 // Helper function to format widget response
-const formatWidgetResponse = (widget: WidgetData) => ({
+const formatWidgetResponse = (widget: WidgetData & { widgetData?: unknown }) => ({
   id: widget.id,
   position: widget.position,
   widgetId: widget.widget_id,
@@ -176,7 +200,7 @@ const formatWidgetResponse = (widget: WidgetData) => ({
   widgetQuery: widget.widget_query,
   created: widget.created,
   props: typeof widget.props === 'string' ? JSON.parse(widget.props) : widget.props,
-  widgetData: {}
+  widgetData: widget.widgetData || {}
 })
 
 // Widget interface
@@ -267,8 +291,8 @@ export const postUserWidget = async (body: Record<string, unknown>): Promise<Rec
       [userId, widgetIdNumber, JSON.stringify(props)]
     )
 
-    // Fetch and return the created widget
-    const widget = await fetchWidgetById(widgetIdNumber)
+    // Fetch the created widget with its data
+    const widget = await fetchWidgetById(widgetIdNumber, userId as string)
     return formatWidgetResponse(widget)
   } catch (error) {
     if (error instanceof Error && error.message.includes('a foreign key constraint fails')) {
@@ -280,10 +304,10 @@ export const postUserWidget = async (body: Record<string, unknown>): Promise<Rec
 
 // Update a user's widget props
 export const updateUserWidget = async (userWidgetId: string, props: Record<string, unknown>): Promise<Record<string, unknown>> => {
-  // First, get the widget_id from the users_has_widgets record
+  // First, get the widget_id and user_id from the users_has_widgets record
   const [widgetRecords] = await mysqlPool.execute<RowDataPacket[]>(
     `
-    SELECT widget_id 
+    SELECT widget_id, user_id 
     FROM timefly.users_has_widgets
     WHERE id = ?
     `,
@@ -295,6 +319,7 @@ export const updateUserWidget = async (userWidgetId: string, props: Record<strin
   }
 
   const widgetId = widgetRecords[0].widget_id
+  const userId = widgetRecords[0].user_id
 
   // Update the user-widget relationship
   const [result] = await mysqlPool.execute<ResultSetHeader>(
@@ -311,8 +336,8 @@ export const updateUserWidget = async (userWidgetId: string, props: Record<strin
     throw new Error('User widget not found')
   }
 
-  // Fetch and return the updated widget using the widget_id
-  const widget = await fetchWidgetById(widgetId)
+  // Fetch and return the updated widget using the widget_id and user_id to include widgetData
+  const widget = await fetchWidgetById(widgetId, userId)
   return formatWidgetResponse(widget)
 }
 
