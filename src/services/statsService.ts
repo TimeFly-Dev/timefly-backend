@@ -117,6 +117,222 @@ export async function getTopItems(props: TopItemsProps): Promise<TopItemsRespons
 	};
 }
 
+// Build query for items grouped by time periods
+const buildTopItemsGroupedByTimeQuery = (
+	userId: number,
+	entity: Entity,
+	timeRange: TimeRange,
+	// startDate and endDate are currently not used for grouped queries but kept for future flexibility
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	startDate?: string,
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	endDate?: string 
+): string => {
+	const { field: groupByField, condition: whereCondition } = getEntityConfig(entity);
+	const baseWhereClause = `WHERE user_id = ${userId} ${whereCondition}`;
+	
+	let dateFilter = '';
+	let selectPeriodFields = '';
+	let groupByPeriod = '';
+	
+	switch(timeRange) {
+		case 'day':
+			dateFilter = ` AND start_time >= date_sub(now(), INTERVAL 7 DAY)`;
+			selectPeriodFields = 'toDate(start_time) AS period_start_date';
+			groupByPeriod = 'period_start_date';
+			break;
+		case 'week':
+			dateFilter = ` AND start_time >= date_sub(now(), INTERVAL 7 WEEK)`;
+			selectPeriodFields = `
+				toStartOfWeek(start_time) AS period_start_date,
+				date_add(toStartOfWeek(start_time), INTERVAL 6 DAY) AS period_end_date
+			`;
+			groupByPeriod = 'period_start_date, period_end_date';
+			break;
+		case 'month':
+			dateFilter = ` AND start_time >= date_sub(now(), INTERVAL 7 MONTH)`;
+			selectPeriodFields = 'toStartOfMonth(start_time) AS period_start_date';
+			groupByPeriod = 'period_start_date';
+			break;
+		default: // Default to daily if timeRange is 'all' or 'year' for this specific grouped view
+			dateFilter = ` AND start_time >= date_sub(now(), INTERVAL 7 DAY)`;
+			selectPeriodFields = 'toDate(start_time) AS period_start_date';
+			groupByPeriod = 'period_start_date';
+	}
+
+	const whereClause = `${baseWhereClause}${dateFilter}`;
+
+	return `
+		SELECT 
+			${selectPeriodFields},
+			${groupByField} as name,
+			SUM(dateDiff('second', start_time, end_time)) as total_seconds,
+			MAX(end_time) as last_used,
+			argMax(project, end_time) as last_project
+		FROM aggregated_pulses
+		${whereClause}
+		GROUP BY ${groupByPeriod}, ${groupByField}
+		ORDER BY period_start_date DESC, total_seconds DESC
+	`;
+};
+
+// Define a type for the raw result from the grouped query
+interface GroupedRawResult extends RawResult {
+	period_start_date: string; // YYYY-MM-DD
+	period_end_date?: string; // YYYY-MM-DD, only for weeks
+}
+
+// Define a type for the final grouped item structure
+interface GroupedTimePeriodItem {
+	period: string | { startDate: string; endDate: string };
+	items: TopItem[];
+}
+
+// Helper to format a date as YYYY-MM-DD
+const formatDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+// Transform raw query results into time-grouped formatted items
+const transformGroupedTopItems = (data: GroupedRawResult[], entity: Entity, timeRange: TimeRange): GroupedTimePeriodItem[] => {
+	const ITEMS_BEFORE_AGGREGATION = 4; // Show top 4 items, aggregate the rest
+	const groupedData: Record<string, TopItem[]> = {};
+	const periodOrder: string[] = []; // To maintain the order of periods
+
+	data.forEach(row => {
+		let periodKey: string;
+		// displayPeriod is determined later during mapping, so not needed here directly for grouping key
+
+		const periodStartDate = new Date(row.period_start_date);
+
+		switch (timeRange) {
+			case 'day':
+				periodKey = formatDate(periodStartDate);
+				break;
+			case 'week':
+				const periodEndDate = row.period_end_date ? new Date(row.period_end_date) : new Date(periodStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+				periodKey = `${formatDate(periodStartDate)}_${formatDate(periodEndDate)}`;
+				break;
+			case 'month':
+				periodKey = `${periodStartDate.toLocaleString('default', { month: 'long' })} ${periodStartDate.getFullYear()}`;
+				break;
+			default: 
+				periodKey = formatDate(periodStartDate);
+				break;
+		}
+
+		if (!groupedData[periodKey]) {
+			groupedData[periodKey] = [];
+			periodOrder.push(periodKey); 
+		}
+
+		const totalSeconds = Number(row.total_seconds);
+		groupedData[periodKey].push({
+			name: row.name,
+			time: totalSeconds,
+			formattedTime: formatDuration(totalSeconds),
+			lastUsed: row.last_used,
+			...(entity === 'projects' ? {} : { lastProject: row.last_project }),
+		});
+	});
+
+	// Aggregate small items into 'Others' for each period
+	periodOrder.forEach(periodKey => {
+		let itemsForPeriod = groupedData[periodKey];
+
+		// Sort by time descending to identify top items
+		itemsForPeriod.sort((a, b) => b.time - a.time);
+
+		if (itemsForPeriod.length > ITEMS_BEFORE_AGGREGATION) {
+			const topItems = itemsForPeriod.slice(0, ITEMS_BEFORE_AGGREGATION);
+			const otherItemsToAggregate = itemsForPeriod.slice(ITEMS_BEFORE_AGGREGATION);
+
+			const othersTotalTime = otherItemsToAggregate.reduce((sum, item) => sum + item.time, 0);
+
+			if (othersTotalTime > 0) {
+				let othersLastUsedDate = new Date(0); // Initialize with a very old date
+				let itemWithMaxLastUsedInOthers: TopItem | undefined = undefined;
+
+				otherItemsToAggregate.forEach(item => {
+					const currentLastUsedDate = new Date(item.lastUsed);
+					if (currentLastUsedDate > othersLastUsedDate) {
+						othersLastUsedDate = currentLastUsedDate;
+						itemWithMaxLastUsedInOthers = item;
+					}
+				});
+
+				const othersItem: TopItem = {
+					name: 'Others',
+					time: othersTotalTime,
+					formattedTime: formatDuration(othersTotalTime),
+					lastUsed: othersLastUsedDate.toISOString(),
+				};
+
+				if (entity !== 'projects' && itemWithMaxLastUsedInOthers && itemWithMaxLastUsedInOthers.lastProject) {
+					othersItem.lastProject = itemWithMaxLastUsedInOthers.lastProject;
+				}
+				groupedData[periodKey] = [...topItems, othersItem];
+			} else {
+				// If 'Others' group has no time, just keep the top items (or all items if less than threshold)
+				groupedData[periodKey] = topItems;
+			}
+		} // No changes needed if itemsForPeriod.length <= ITEMS_BEFORE_AGGREGATION
+	});
+
+	// Map to the final array structure, preserving order
+	return periodOrder.map(key => {
+		let displayPeriodValue: string | { startDate: string; endDate: string };
+		if (timeRange === 'week') {
+			const [startStr, endStr] = key.split('_');
+			displayPeriodValue = { startDate: startStr, endDate: endStr };
+		} else {
+			displayPeriodValue = key; 
+		}
+		return {
+			period: displayPeriodValue,
+			items: groupedData[key]
+		};
+	});
+};
+
+// Main function to get top items grouped by time periods
+export async function getTopItemsGroupedByTime(props: TopItemsProps): Promise<Record<string, unknown>> {
+	// Extract and default parameters
+	const { 
+		userId, 
+		timeRange = 'day', 
+		entity = 'projects', 
+		startDate, 
+		endDate
+	} = props;
+
+	// Validate timeRange for this specific endpoint, as 'year' and 'all' are not directly supported for 7-period grouping
+	const validTimeRanges: TimeRange[] = ['day', 'week', 'month'];
+	const effectiveTimeRange = validTimeRanges.includes(timeRange) ? timeRange : 'day';
+
+	// Build query
+	const query = buildTopItemsGroupedByTimeQuery(userId, entity, effectiveTimeRange, startDate, endDate);
+	
+	// Execute query
+	const result = await clickhouseClient.query({
+		query,
+		format: 'JSONEachRow'
+	});
+
+	// Process results
+	const data = (await result.json()) as GroupedRawResult[];
+	const groupedItemsArray = transformGroupedTopItems(data, entity, effectiveTimeRange);
+
+	// Return formatted response
+	return {
+		timeRange: effectiveTimeRange, // Reflect the actual timeRange used for grouping
+		[entity]: groupedItemsArray
+	};
+}
+
 export async function getPulses({
 	userId,
 	startDate,
