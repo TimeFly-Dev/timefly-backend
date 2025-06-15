@@ -124,9 +124,9 @@ const buildTopItemsGroupedByTimeQuery = (
 	timeRange: TimeRange,
 	// startDate and endDate are currently not used for grouped queries but kept for future flexibility
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	startDate?: string,
+	_startDate?: string,
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	endDate?: string 
+	_endDate?: string 
 ): string => {
 	const { field: groupByField, condition: whereCondition } = getEntityConfig(entity);
 	const baseWhereClause = `WHERE user_id = ${userId} ${whereCondition}`;
@@ -137,12 +137,12 @@ const buildTopItemsGroupedByTimeQuery = (
 	
 	switch(timeRange) {
 		case 'day':
-			dateFilter = ` AND start_time >= date_sub(now(), INTERVAL 7 DAY)`;
+			dateFilter = ' AND start_time >= date_sub(now(), INTERVAL 7 DAY)';
 			selectPeriodFields = 'toDate(start_time) AS period_start_date';
 			groupByPeriod = 'period_start_date';
 			break;
 		case 'week':
-			dateFilter = ` AND start_time >= date_sub(now(), INTERVAL 7 WEEK)`;
+			dateFilter = ' AND start_time >= date_sub(now(), INTERVAL 7 WEEK)';
 			selectPeriodFields = `
 				toStartOfWeek(start_time) AS period_start_date,
 				date_add(toStartOfWeek(start_time), INTERVAL 6 DAY) AS period_end_date
@@ -150,12 +150,12 @@ const buildTopItemsGroupedByTimeQuery = (
 			groupByPeriod = 'period_start_date, period_end_date';
 			break;
 		case 'month':
-			dateFilter = ` AND start_time >= date_sub(now(), INTERVAL 7 MONTH)`;
+			dateFilter = ' AND start_time >= date_sub(now(), INTERVAL 7 MONTH)';
 			selectPeriodFields = 'toStartOfMonth(start_time) AS period_start_date';
 			groupByPeriod = 'period_start_date';
 			break;
 		default: // Default to daily if timeRange is 'all' or 'year' for this specific grouped view
-			dateFilter = ` AND start_time >= date_sub(now(), INTERVAL 7 DAY)`;
+			dateFilter = ' AND start_time >= date_sub(now(), INTERVAL 7 DAY)';
 			selectPeriodFields = 'toDate(start_time) AS period_start_date';
 			groupByPeriod = 'period_start_date';
 	}
@@ -212,10 +212,11 @@ const transformGroupedTopItems = (data: GroupedRawResult[], entity: Entity, time
 			case 'day':
 				periodKey = formatDate(periodStartDate);
 				break;
-			case 'week':
+			case 'week': {
 				const periodEndDate = row.period_end_date ? new Date(row.period_end_date) : new Date(periodStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
 				periodKey = `${formatDate(periodStartDate)}_${formatDate(periodEndDate)}`;
 				break;
+			}
 			case 'month':
 				periodKey = `${periodStartDate.toLocaleString('default', { month: 'long' })} ${periodStartDate.getFullYear()}`;
 				break;
@@ -241,7 +242,7 @@ const transformGroupedTopItems = (data: GroupedRawResult[], entity: Entity, time
 
 	// Aggregate small items into 'Others' for each period
 	periodOrder.forEach(periodKey => {
-		let itemsForPeriod = groupedData[periodKey];
+		const itemsForPeriod = groupedData[periodKey];
 
 		// Sort by time descending to identify top items
 		itemsForPeriod.sort((a, b) => b.time - a.time);
