@@ -1,5 +1,5 @@
 import { clickhouseClient } from '../db/clickhouse'
-import type { codingTime, codingTimeOptions, Pulse, PulsesOptions, DashboardTimelineItem, Entity, TimeRange, RawResult, TopItem, TopItemsProps, TopItemsResponse } from '../types/stats'
+import type { codingTime, codingTimeOptions, Pulse, PulsesOptions, DashboardTimelineItem, Entity, TimeRange, RawResult, TopItem, TopItemsProps, TopItemsResponse, GroupedRawResult, GroupedTimePeriodItem } from '../types/stats'
 import { formatDuration } from '../utils/timeFormatters'
 
 // Get entity configuration (field name and condition)
@@ -14,7 +14,6 @@ const getEntityConfig = (entity: Entity): { field: string; condition: string } =
 	if (!config[entity]) {
 		throw new Error(`Invalid entity: ${entity}`);
 	}
-
 	return config[entity];
 };
 
@@ -176,17 +175,7 @@ const buildTopItemsGroupedByTimeQuery = (
 	`;
 };
 
-// Define a type for the raw result from the grouped query
-interface GroupedRawResult extends RawResult {
-	period_start_date: string; // YYYY-MM-DD
-	period_end_date?: string; // YYYY-MM-DD, only for weeks
-}
-
-// Define a type for the final grouped item structure
-interface GroupedTimePeriodItem {
-	period: string | { startDate: string; endDate: string };
-	items: TopItem[];
-}
+// Types moved to ../types/stats.ts
 
 // Helper to format a date as YYYY-MM-DD
 const formatDate = (date: Date): string => {
@@ -234,7 +223,7 @@ const transformGroupedTopItems = (data: GroupedRawResult[], entity: Entity, time
 		groupedData[periodKey].push({
 			name: row.name,
 			time: totalSeconds,
-			formattedTime: formatDuration(totalSeconds),
+			formattedTime: formatDuration(totalSeconds / 3600), // Convert seconds to hours for formatting
 			lastUsed: row.last_used,
 			...(entity === 'projects' ? {} : { lastProject: row.last_project }),
 		});
@@ -268,7 +257,7 @@ const transformGroupedTopItems = (data: GroupedRawResult[], entity: Entity, time
 				const othersItem: TopItem = {
 					name: 'Others',
 					time: othersTotalTime,
-					formattedTime: formatDuration(othersTotalTime),
+					formattedTime: formatDuration(othersTotalTime / 3600), // Convert seconds to hours for formatting
 					lastUsed: othersLastUsedDate.toISOString(),
 				};
 
@@ -283,8 +272,32 @@ const transformGroupedTopItems = (data: GroupedRawResult[], entity: Entity, time
 		} // No changes needed if itemsForPeriod.length <= ITEMS_BEFORE_AGGREGATION
 	});
 
-	// Map to the final array structure, preserving order
-	return periodOrder.map(key => {
+	// Sort periods chronologically from old to new
+	const sortedPeriodOrder = [...periodOrder].sort((a, b) => {
+		// For week format (startDate_endDate)
+		if (timeRange === 'week') {
+			const aStartDate = new Date(a.split('_')[0]);
+			const bStartDate = new Date(b.split('_')[0]);
+			return aStartDate.getTime() - bStartDate.getTime();
+		} 
+		// For month format (Month YYYY)
+		if (timeRange === 'month') {
+			const aMonthYear = a.split(' ');
+			const bMonthYear = b.split(' ');
+			const aYear = Number.parseInt(aMonthYear[1]);
+			const bYear = Number.parseInt(bMonthYear[1]);
+			if (aYear !== bYear) { return aYear - bYear };
+			
+			// Same year, compare months
+			const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+			return months.indexOf(aMonthYear[0]) - months.indexOf(bMonthYear[0]);
+		}
+		// For day format (YYYY-MM-DD)
+		return new Date(a).getTime() - new Date(b).getTime();
+	});
+
+	// Map to the final array structure with chronological order
+	return sortedPeriodOrder.map(key => {
 		let displayPeriodValue: string | { startDate: string; endDate: string };
 		if (timeRange === 'week') {
 			const [startStr, endStr] = key.split('_');
@@ -301,37 +314,33 @@ const transformGroupedTopItems = (data: GroupedRawResult[], entity: Entity, time
 
 // Main function to get top items grouped by time periods
 export async function getTopItemsGroupedByTime(props: TopItemsProps): Promise<Record<string, unknown>> {
-	// Extract and default parameters
-	const { 
-		userId, 
-		timeRange = 'day', 
-		entity = 'projects', 
-		startDate, 
-		endDate
-	} = props;
+	async function executeQuery(query: string): Promise<GroupedRawResult[]> {
+		const result = await clickhouseClient.query({
+			query,
+			format: 'JSONEachRow'
+		});
+		return await result.json() as GroupedRawResult[];
+	}
 
-	// Validate timeRange for this specific endpoint, as 'year' and 'all' are not directly supported for 7-period grouping
-	const validTimeRanges: TimeRange[] = ['day', 'week', 'month'];
-	const effectiveTimeRange = validTimeRanges.includes(timeRange) ? timeRange : 'day';
+	function validateTimeRange(timeRange: TimeRange): TimeRange {
+		const validTimeRanges: TimeRange[] = ['day', 'week', 'month'];
+		return validTimeRanges.includes(timeRange) ? timeRange : 'day';
+	}
 
-	// Build query
+	function formatResponse(data: GroupedTimePeriodItem[], entity: Entity, timeRange: TimeRange): Record<string, unknown> {
+		return {
+			timeRange,
+			[entity]: data
+		};
+	}
+
+	const { userId, timeRange, entity = 'projects', startDate, endDate } = props;
+	const effectiveTimeRange = validateTimeRange(timeRange);
 	const query = buildTopItemsGroupedByTimeQuery(userId, entity, effectiveTimeRange, startDate, endDate);
-	
-	// Execute query
-	const result = await clickhouseClient.query({
-		query,
-		format: 'JSONEachRow'
-	});
-
-	// Process results
-	const data = (await result.json()) as GroupedRawResult[];
+	const data = await executeQuery(query);
 	const groupedItemsArray = transformGroupedTopItems(data, entity, effectiveTimeRange);
 
-	// Return formatted response
-	return {
-		timeRange: effectiveTimeRange, // Reflect the actual timeRange used for grouping
-		[entity]: groupedItemsArray
-	};
+	return formatResponse(groupedItemsArray, entity, effectiveTimeRange);
 }
 
 export async function getPulses({

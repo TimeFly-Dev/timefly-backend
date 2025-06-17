@@ -105,3 +105,13 @@ export interface TopItemsResponse {
 
 export type Entity = 'languages' | 'ides' | 'projects' | 'machines';
 export type TimeRange = 'day' | 'week' | 'month' | 'year' | 'all';
+
+export interface GroupedRawResult extends RawResult {
+	period_start_date: string; // YYYY-MM-DD
+	period_end_date?: string; // YYYY-MM-DD, only for weeks
+}
+
+export interface GroupedTimePeriodItem {
+	period: string | { startDate: string; endDate: string };
+	items: TopItem[];
+}
