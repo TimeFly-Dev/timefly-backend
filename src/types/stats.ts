@@ -16,7 +16,8 @@ export interface codingTimeOptions {
 	startDate?: string
 	endDate?: string
 	date?: string
-	aggregation: AggregationType
+	timeRange?: TimeRange
+	aggregation?: AggregationType
 }
 
 export type ClickHouseResult = codingTime | TotalcodingTimes
@@ -65,6 +66,7 @@ export interface DashboardTimelineItem {
 	start: string
 	end: string
 	project: string
+	language: string
 	time: number
 }
 
