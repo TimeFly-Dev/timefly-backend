@@ -318,7 +318,6 @@ export const updateUserWidget = async (userWidgetId: string, props: Record<strin
     throw new Error('User widget not found')
   }
 
-  const widgetId = widgetRecords[0].widget_id
   const userId = widgetRecords[0].user_id
 
   // Update the user-widget relationship
@@ -336,8 +335,53 @@ export const updateUserWidget = async (userWidgetId: string, props: Record<strin
     throw new Error('User widget not found')
   }
 
-  // Fetch and return the updated widget using the widget_id and user_id to include widgetData
-  const widget = await fetchWidgetById(widgetId, userId)
+  // Fetch the specific updated widget by its ID (userWidgetId) instead of just by widget_id
+  const [widgets] = await mysqlPool.execute<WidgetData[]>(
+    `
+    SELECT 
+      uhw.id as id,
+      w.id as widget_id,
+      w.name as widget_name,
+      w.query as widget_query,
+      uhw.props as props,
+      uhw.created_at as created,
+      uhw.user_id as user_id
+    FROM 
+      timefly.users_has_widgets uhw
+    JOIN 
+      timefly.widgets w ON w.id = uhw.widget_id
+    WHERE 
+      uhw.id = ?
+    `,
+    [userWidgetId]
+  )
+
+  if (!Array.isArray(widgets) || widgets.length === 0) {
+    throw new Error('User widget not found after update')
+  }
+
+  const widget = widgets[0];
+  
+  // If widget has a query, execute it to get widget data
+  if (widget.widget_query && widget.widget_query.trim() !== '') {
+    // Reuse queriesToExecute logic with a single item
+    const queriesToExecute = [{
+      id: widget.id,
+      widget_id: Number(widget.widget_id),
+      widget_name: widget.widget_name,
+      widget_query: widget.widget_query,
+      props: widget.props,
+      created: widget.created
+    }];
+    
+    const widgetData = await executeWidgetQueries(userId, queriesToExecute);
+    
+    return formatWidgetResponse({
+      ...widget,
+      widgetData: widgetData[widget.id]
+    });
+  }
+  
   return formatWidgetResponse(widget)
 }
 
